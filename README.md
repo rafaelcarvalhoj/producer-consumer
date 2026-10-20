@@ -5,22 +5,28 @@ Projeto em C para simular produtor e consumidor no terminal.
 ## Estrutura
 
 ```text
+Makefile
+README.md
 src/
-  main.c                  Entrada do programa
+  main.c
   cli/
-    startup_args.c/.h     Argumentos iniciais
-    command_loop.c/.h    Leitura de comandos até shutdown
-    command_parser.c/.h  Converte texto em uma estrutura de comando
-    command_dispatch.c/.h Chama a operação correspondente na application
-    output.c/.h          Formata e imprime mensagens
-  application/            Operações de produção e consumo
-  structures/             Estruturas de dados
-  domain/                 Regras, como a capacidade do buffer
-  infrastructure/unix/    Funções para chamadas de sistema Unix
+    startup_args.c/.h
+    command_parser.c/.h
+    parsing/
+      str_to_int.c/.h
+  structures/
+    program_arguments.h
+    program_command.h
+  unions/
+    paradigm.c/.h
+    command.h
+  application/
+  domain/
+  infrastructure/unix/
 tests/
-  unit/                   Testes de unidades
-  integration/            Testes do programa completo
-build/                    Arquivos gerados pelo Make
+  unit/
+  integration/
+build/                    Gerado pelo Make
 ```
 
 ## Comandos
@@ -31,5 +37,3 @@ make run ARGS="2 1"
 make test
 make clean
 ```
-
-O `main.c` é apenas o ponto de entrada inicial. A leitura dos comandos do terminal ainda será implementada em `cli/`.
