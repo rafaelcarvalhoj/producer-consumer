@@ -10,9 +10,9 @@ expect_failure() {
     fi
 }
 
-"$program" 2 1 >/dev/null
-"$program" 2 2 >/dev/null
-"$program" +2 +1 >/dev/null
+printf '>> shutdown\n' | "$program" 2 1 >/dev/null
+printf '>> shutdown\n' | "$program" 2 2 >/dev/null
+printf '>> produz 2 5 2 &\n>> shutdown\n' | "$program" +2 +1 >/dev/null
 expect_failure
 expect_failure 2
 expect_failure 2 1 3
