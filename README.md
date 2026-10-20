@@ -27,7 +27,7 @@ build/                    Arquivos gerados pelo Make
 
 ```sh
 make build
-make run
+make run ARGS="2 1"
 make test
 make clean
 ```
