@@ -1,5 +1,4 @@
 CC ?= cc
-PKG_CONFIG ?= pkg-config
 CPPFLAGS ?= -Isrc
 CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -g -pthread
 LDFLAGS ?=
@@ -21,19 +20,14 @@ $(APP): $(APP_SOURCES) $(APP_HEADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(APP_SOURCES) -o $@ $(LDFLAGS) $(LDLIBS)
 
 run: $(APP)
-	./$(APP)
+	./$(APP) $(ARGS)
 
-ifneq ($(strip $(UNIT_SOURCES)),)
 $(TEST_APP): $(UNIT_SOURCES) $(LIB_SOURCES) $(APP_HEADERS)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(shell $(PKG_CONFIG) --cflags criterion) $(UNIT_SOURCES) $(LIB_SOURCES) -o $@ $(LDFLAGS) $(LDLIBS) $(shell $(PKG_CONFIG) --libs criterion)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(UNIT_SOURCES) $(LIB_SOURCES) -o $@ $(LDFLAGS) $(LDLIBS)
 
 test: $(APP) $(TEST_APP)
 	./$(TEST_APP)
-else
-test: $(APP)
-	@printf 'Nenhum teste unitário encontrado em tests/unit/.\n'
-endif
 	@for script in tests/integration/test_*.sh; do \
 		[ -f "$$script" ] || continue; \
 		sh "$$script" ./$(APP) || exit $$?; \
