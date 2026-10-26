@@ -6,12 +6,9 @@
 
 ProgramCommand *next_command(void)
 {
-    char prompt[3];
+    printf(">> ");
     char operation[9];
-    if (scanf(" %2s %8s", prompt, operation) != 2) {
-        return NULL;
-    }
-    if (strcmp(prompt, ">>") != 0) {
+    if (scanf("%8s", operation) != 1) {
         return NULL;
     }
 
@@ -30,7 +27,7 @@ ProgramCommand *next_command(void)
         char extra[2];
         int ack;
         if (scanf(" %d %d %d %1s", &parsed.p, &parsed.n_msgs, &ack, extra) != 4 ||
-            parsed.p <= 0 || parsed.n_msgs <= 0 ||
+            parsed.p < 0 || parsed.n_msgs <= 0 ||
             (ack != YES && ack != NO) || strcmp(extra, "&") != 0) {
             return NULL;
         }
