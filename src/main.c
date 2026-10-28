@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include "cli/startup_args.h"
 #include "cli/command_parser.h"
-
+#include "application/init.h"
 
 static void startup_log(const ProgramArguments *args) {
     puts("Producer-Consumer");
@@ -20,6 +20,8 @@ int main(int argc, char **argv) {
 
     ProgramCommand *cmd;
 
+    WorkerInfo * producers_table = setup_producers(args->producers);
+
     for (;;) {
         cmd = next_command();
         if (cmd == NULL) {
@@ -33,6 +35,7 @@ int main(int argc, char **argv) {
             break;
         }
     }
+    free_workers(producers_table);
     free(args);
     return EXIT_SUCCESS;
 }
