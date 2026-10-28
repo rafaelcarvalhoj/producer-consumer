@@ -10,11 +10,11 @@ void test_next_command(void)
 {
     FILE *input = tmpfile();
     assert(input != NULL);
-    assert(fputs(">> produz 2 5 2 &\n"
-                 ">> consome 3 4 1 &\n"
-                 ">> shutdown\n"
-                 ">> produz 2 5 3 &\n"
-                 ">> desconhecido\n", input) >= 0);
+    assert(fputs("produz 2 5 2 &\n"
+                 "consome 3 4 1 &\n"
+                 "shutdown\n"
+                 "produz 2 5 3 &\n"
+                 "desconhecido\n", input) >= 0);
     rewind(input);
 
     int original_stdin = dup(STDIN_FILENO);
