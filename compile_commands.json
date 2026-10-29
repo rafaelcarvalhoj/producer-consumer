@@ -1,0 +1,182 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-c",
+      "-Isrc",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-g",
+      "-pthread",
+      "-pthread",
+      "-o",
+      "build/producer-consumer",
+      "src/main.c"
+    ],
+    "directory": "/home/gabri/repos/producer-consumer",
+    "file": "/home/gabri/repos/producer-consumer/src/main.c",
+    "output": "/home/gabri/repos/producer-consumer/build/producer-consumer"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-c",
+      "-Isrc",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-g",
+      "-pthread",
+      "-pthread",
+      "-o",
+      "build/producer-consumer",
+      "src/application/shared_memory_paradigm.c"
+    ],
+    "directory": "/home/gabri/repos/producer-consumer",
+    "file": "/home/gabri/repos/producer-consumer/src/application/shared_memory_paradigm.c",
+    "output": "/home/gabri/repos/producer-consumer/build/producer-consumer"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-c",
+      "-Isrc",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-g",
+      "-pthread",
+      "-pthread",
+      "-o",
+      "build/producer-consumer",
+      "src/cli/command_parser.c"
+    ],
+    "directory": "/home/gabri/repos/producer-consumer",
+    "file": "/home/gabri/repos/producer-consumer/src/cli/command_parser.c",
+    "output": "/home/gabri/repos/producer-consumer/build/producer-consumer"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-c",
+      "-Isrc",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-g",
+      "-pthread",
+      "-pthread",
+      "-o",
+      "build/producer-consumer",
+      "src/cli/startup_args.c"
+    ],
+    "directory": "/home/gabri/repos/producer-consumer",
+    "file": "/home/gabri/repos/producer-consumer/src/cli/startup_args.c",
+    "output": "/home/gabri/repos/producer-consumer/build/producer-consumer"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-c",
+      "-Isrc",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-g",
+      "-pthread",
+      "-pthread",
+      "-o",
+      "build/producer-consumer",
+      "src/structures/shared_memory_buffer.c"
+    ],
+    "directory": "/home/gabri/repos/producer-consumer",
+    "file": "/home/gabri/repos/producer-consumer/src/structures/shared_memory_buffer.c",
+    "output": "/home/gabri/repos/producer-consumer/build/producer-consumer"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-c",
+      "-Isrc",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-g",
+      "-pthread",
+      "-pthread",
+      "-o",
+      "build/producer-consumer",
+      "src/unions/paradigm.c"
+    ],
+    "directory": "/home/gabri/repos/producer-consumer",
+    "file": "/home/gabri/repos/producer-consumer/src/unions/paradigm.c",
+    "output": "/home/gabri/repos/producer-consumer/build/producer-consumer"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-c",
+      "-Isrc",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-g",
+      "-pthread",
+      "-pthread",
+      "-o",
+      "build/producer-consumer",
+      "src/cli/parsing/str_to_int.c"
+    ],
+    "directory": "/home/gabri/repos/producer-consumer",
+    "file": "/home/gabri/repos/producer-consumer/src/cli/parsing/str_to_int.c",
+    "output": "/home/gabri/repos/producer-consumer/build/producer-consumer"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-c",
+      "-Isrc",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-g",
+      "-pthread",
+      "-pthread",
+      "-o",
+      "build/producer-consumer",
+      "src/infrastructure/unix/semaphore.c"
+    ],
+    "directory": "/home/gabri/repos/producer-consumer",
+    "file": "/home/gabri/repos/producer-consumer/src/infrastructure/unix/semaphore.c",
+    "output": "/home/gabri/repos/producer-consumer/build/producer-consumer"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-c",
+      "-Isrc",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-g",
+      "-pthread",
+      "-pthread",
+      "-o",
+      "build/producer-consumer",
+      "src/infrastructure/unix/shared_memory.c"
+    ],
+    "directory": "/home/gabri/repos/producer-consumer",
+    "file": "/home/gabri/repos/producer-consumer/src/infrastructure/unix/shared_memory.c",
+    "output": "/home/gabri/repos/producer-consumer/build/producer-consumer"
+  }
+]
