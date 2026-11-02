@@ -50,7 +50,7 @@ test: $(APP) $(SHM_INTEGRATION_TEST) $(TEST_APP)
 	@for script in tests/integration/test_*.sh; do \
 		[ -f "$$script" ] || continue; \
 		log="$(TEST_LOG_DIR)/$${script##*/}.log"; \
-		if sh "$$script" ./$(APP) > "$$log" 2>&1; then \
+		if bash "$$script" ./$(APP) > "$$log" 2>&1; then \
 			printf '%s passed.\n' "$$script"; \
 		else \
 			printf '%s failed (see %s).\n' "$$script" "$$log" >&2; \

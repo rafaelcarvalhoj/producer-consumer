@@ -1,5 +1,5 @@
 
-#include "application/shared_memory_paradigm.h"
+#include "application/shm/shared_memory_paradigm.h"
 
 #include <assert.h>
 #include <stdio.h>
