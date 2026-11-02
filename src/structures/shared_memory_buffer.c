@@ -44,10 +44,6 @@ int shm_buffer_is_full(const SharedMemoryBuffer *buffer) {
     return 0;
   }
 
-  /*
-   * Se o estado interno estiver inconsistente, não devemos
-   * permitir novas inserções.
-   */
   if (!buffer_is_valid(buffer)) {
     return 1;
   }
@@ -65,15 +61,8 @@ int shm_buffer_push(SharedMemoryBuffer *buffer,
     return -1;
   }
 
-  /*
-   * Insere no final lógico da fila.
-   */
   buffer->messages[buffer->tail] = *message;
 
-  /*
-   * Avança circularmente:
-   * 0, 1, ..., 84, 0, 1, ...
-   */
   buffer->tail = (uint16_t)((buffer->tail + 1) % SHM_BUFFER_CAPACITY);
 
   ++buffer->count;

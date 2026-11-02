@@ -13,7 +13,7 @@ WorkerInfo * setup_producers(int n_workers) {
 
     for (int i = 0; i < n_workers; i++){
         producers[i].pid = i;
-        printf("[TODO] Implementar função que inicia os produtores\n");
+        // printf("[TODO] Implementar função que inicia os produtores\n");
     }
 
     return producers;

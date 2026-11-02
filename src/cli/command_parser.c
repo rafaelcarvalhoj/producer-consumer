@@ -7,6 +7,7 @@
 ProgramCommand *next_command(void)
 {
     printf(">> ");
+    fflush(stdout);
     char operation[9];
     if (scanf("%8s", operation) != 1) {
         return NULL;
