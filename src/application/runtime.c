@@ -49,23 +49,39 @@ static void terminate_unregistered_child(pid_t pid, int ack_semid) {
   while (waitpid(pid, NULL, 0) == -1 && errno == EINTR) {
   }
 
-  ack_semaphore_destroy(ack_semid);
+  if (ack_semid >= 0) {
+    ack_semaphore_destroy(ack_semid);
+  }
 
   errno = saved_errno;
 }
 
-static int process_command(SharedMemoryContext *context, WorkerManager *manager,
+static int process_command(void *context, WorkerManager *manager,
                            ProducerConsumerParadigm paradigm,
                            const ProgramCommand *cmd) {
-  if (paradigm != SHARED_MEMORY) {
-    errno = ENOSYS;
-    return -1;
-  }
-
   pid_t child_pid;
   int ack_semid = -1;
 
-  if (shm_process(context, cmd, &child_pid, &ack_semid) == -1) {
+  switch (paradigm) {
+  case SHARED_MEMORY:
+    if (shm_process((SharedMemoryContext *)context, cmd, &child_pid,
+                    &ack_semid) == -1) {
+      return -1;
+    }
+    break;
+
+  case MESSAGE_EXCHANGE:
+    /*
+     * if (msg_process((MessageContext *)context, cmd, &child_pid,
+     *                 &ack_semid) == -1) {
+     *   return -1;
+     * }
+     */
+    errno = ENOSYS;
+    return -1;
+
+  default:
+    errno = EINVAL;
     return -1;
   }
 
@@ -81,8 +97,7 @@ static int process_command(SharedMemoryContext *context, WorkerManager *manager,
   return 0;
 }
 
-static int run_command_loop(SharedMemoryContext *context,
-                            WorkerManager *manager,
+static int run_command_loop(void *context, WorkerManager *manager,
                             ProducerConsumerParadigm paradigm) {
   int exit_status = EXIT_SUCCESS;
 
@@ -147,22 +162,46 @@ int application_run(const ProgramArguments *args) {
   startup_log(args);
 
   SharedMemoryContext shm_context = {0};
+  // MessageContext msg_context = {0};
+
+  void *context = NULL;
   bool context_initialized = false;
+
+  switch (args->paradigm) {
+  case SHARED_MEMORY:
+    if (shm_context_init(&shm_context, args->producers) == -1) {
+      perror("[MAIN] Erro inicializando memória compartilhada");
+      return EXIT_FAILURE;
+    }
+
+    context = &shm_context;
+    context_initialized = true;
+    break;
+
+  case MESSAGE_EXCHANGE:
+    /*
+     * if (msg_context_init(&msg_context, args->producers) == -1) {
+     *   perror("[MAIN] Erro inicializando troca de mensagens");
+     *   return EXIT_FAILURE;
+     * }
+     *
+     * context = &msg_context;
+     * context_initialized = true;
+     */
+    errno = ENOSYS;
+    perror("[MAIN] Paradigma ainda não implementado");
+    return EXIT_FAILURE;
+
+  default:
+    errno = EINVAL;
+    perror("[MAIN] Paradigma inválido");
+    return EXIT_FAILURE;
+  }
 
   WorkerManager manager;
   worker_manager_init(&manager);
 
-  if (args->paradigm == SHARED_MEMORY) {
-    if (shm_context_init(&shm_context, args->producers) == -1) {
-      perror("[MAIN] Erro inicializando memória compartilhada");
-      worker_manager_destroy(&manager);
-      return EXIT_FAILURE;
-    }
-
-    context_initialized = true;
-  }
-
-  int exit_status = run_command_loop(&shm_context, &manager, args->paradigm);
+  int exit_status = run_command_loop(context, &manager, args->paradigm);
 
   if (shutdown_requested) {
     printf("\n[MAIN] SIGINT recebido. Iniciando encerramento...\n");
@@ -176,9 +215,22 @@ int application_run(const ProgramArguments *args) {
   }
 
   if (all_workers_stopped && context_initialized) {
-    if (shm_context_destroy(&shm_context) == -1) {
-      perror("[MAIN] Erro destruindo contexto");
-      exit_status = EXIT_FAILURE;
+    switch (args->paradigm) {
+    case SHARED_MEMORY:
+      if (shm_context_destroy(&shm_context) == -1) {
+        perror("[MAIN] Erro destruindo contexto SHM");
+        exit_status = EXIT_FAILURE;
+      }
+      break;
+
+    case MESSAGE_EXCHANGE:
+      /*
+       * msg_context_destroy(&msg_context);
+       */
+      break;
+
+    default:
+      break;
     }
   }
 

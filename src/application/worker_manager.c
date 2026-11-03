@@ -55,9 +55,6 @@ int worker_manager_shutdown(WorkerManager *manager, bool *all_stopped) {
 
   int first_errno = 0;
 
-  /*
-   * Primeiro, solicita o encerramento de todos os filhos.
-   */
   for (size_t i = 0; i < manager->count; i++) {
     pid_t pid = manager->workers[i].pid;
 
@@ -99,10 +96,6 @@ int worker_manager_shutdown(WorkerManager *manager, bool *all_stopped) {
     }
   }
 
-  /*
-   * Não remove os semáforos enquanto não houver certeza
-   * de que todos os filhos foram recolhidos.
-   */
   if (first_errno != 0) {
     errno = first_errno;
     return -1;
@@ -110,9 +103,6 @@ int worker_manager_shutdown(WorkerManager *manager, bool *all_stopped) {
 
   *all_stopped = true;
 
-  /*
-   * Agora é seguro remover os semáforos de ACK.
-   */
   for (size_t i = 0; i < manager->count; i++) {
     int semid = manager->workers[i].ack_semid;
 
