@@ -6,6 +6,6 @@
 #include "structures/program_command.h"
 
 int shm_process(SharedMemoryContext *context, const ProgramCommand *cmd,
-                pid_t *child_pid);
+                pid_t *child_pid, int *ack_semid);
 
 #endif

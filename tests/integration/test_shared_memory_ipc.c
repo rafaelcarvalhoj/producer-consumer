@@ -23,9 +23,7 @@ void test_shm_channel_transfers_message(void) {
   assert(shm_channel_create(&channel) == 0);
 
   SharedMemoryMessage sent = {
-      .pid = 1234,
-      .sequence = 42,
-      .timestamp = {.tv_sec = 1791251487, .tv_nsec = 123}};
+      .pid = 1234, .sequence = 42, .timestamp = 1791251487 * UINT64_C(1000000000) + 123};
 
   SharedMemoryMessage received = {0};
 
@@ -34,8 +32,7 @@ void test_shm_channel_transfers_message(void) {
 
   assert(received.pid == sent.pid);
   assert(received.sequence == sent.sequence);
-  assert(received.timestamp.tv_sec == sent.timestamp.tv_sec);
-  assert(received.timestamp.tv_nsec == sent.timestamp.tv_nsec);
+  assert(received.timestamp == sent.timestamp);
 
   assert(shm_channel_destroy(&channel) == 0);
 }

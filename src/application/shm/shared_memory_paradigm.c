@@ -107,13 +107,16 @@ int shm_channel_send(SharedMemoryChannel *channel,
 }
 
 int shm_channel_receive(SharedMemoryChannel *channel,
-                        SharedMemoryMessage *message_out) {
-  if (!channel_is_valid(channel) || message_out == NULL) {
+                        SharedMemoryMessage *message, int blocking) {
+  if (!channel_is_valid(channel) || message == NULL) {
     errno = EINVAL;
     return -1;
   }
 
-  if (semaphore_p(channel->sem_full) == -1) {
+  int result = blocking ? semaphore_p(channel->sem_full)
+                        : semaphore_try_p(channel->sem_full);
+
+  if (result == -1) {
     return -1;
   }
 
@@ -124,7 +127,7 @@ int shm_channel_receive(SharedMemoryChannel *channel,
     return -1;
   }
 
-  if (shm_buffer_pop(channel->buffer, message_out) == -1) {
+  if (shm_buffer_pop(channel->buffer, message) == -1) {
     (void)semaphore_v(channel->sem_mutex);
     (void)semaphore_v(channel->sem_full);
     errno = EIO;

@@ -30,8 +30,7 @@ int shm_channel_send(SharedMemoryChannel *channel,
  * Pode bloquear enquanto não houver mensagens.
  */
 int shm_channel_receive(SharedMemoryChannel *channel,
-                        SharedMemoryMessage *message_out);
-
+                        SharedMemoryMessage *message, int blocking);
 /*
  * Libera os recursos do canal.
  * Deve ser chamada somente depois que os processos que utilizam

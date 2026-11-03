@@ -65,21 +65,35 @@ int shm_context_init(SharedMemoryContext *context, int producers) {
   return 0;
 }
 
-void shm_context_destroy(SharedMemoryContext *context) {
+int shm_context_destroy(SharedMemoryContext *context) {
   if (context == NULL) {
-    return;
+    errno = EINVAL;
+    return -1;
   }
+
+  int first_errno = 0;
 
   if (context->channels != NULL) {
     for (int i = 0; i < context->n_channels; i++) {
-      shm_channel_destroy(&context->channels[i]);
+      if (shm_channel_destroy(&context->channels[i]) == -1 &&
+          first_errno == 0) {
+        first_errno = errno;
+      }
     }
 
-    free(context->channels);
+    if (first_errno == 0) {
+      free(context->channels);
+      context->channels = NULL;
+      context->n_channels = 0;
+    }
   }
 
-  context->channels = NULL;
-  context->n_channels = 0;
-
   sequential_destroy(&context->sequential);
+
+  if (first_errno != 0) {
+    errno = first_errno;
+    return -1;
+  }
+
+  return 0;
 }

@@ -13,6 +13,6 @@ typedef struct {
 } SharedMemoryContext;
 
 int shm_context_init(SharedMemoryContext *context, int producers);
-void shm_context_destroy(SharedMemoryContext *context);
+int shm_context_destroy(SharedMemoryContext *context);
 
 #endif

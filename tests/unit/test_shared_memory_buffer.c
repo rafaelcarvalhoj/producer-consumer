@@ -7,10 +7,9 @@
 
 static SharedMemoryMessage make_message(pid_t pid, uint32_t sequence,
                                         time_t seconds) {
-  SharedMemoryMessage message = {
-      .pid = pid,
-      .sequence = sequence,
-      .timestamp = {.tv_sec = seconds, .tv_nsec = 0}};
+  SharedMemoryMessage message = {.pid = pid,
+                                 .sequence = sequence,
+                                 .timestamp = seconds * UINT64_C(1000000000)};
 
   return message;
 }
@@ -38,7 +37,7 @@ void test_buffer_push_and_pop(void) {
   assert(shm_buffer_pop(&buffer, &received) == 0);
   assert(received.pid == original.pid);
   assert(received.sequence == original.sequence);
-  assert(received.timestamp.tv_sec == original.timestamp.tv_sec);
+  assert(received.timestamp == original.timestamp);
   assert(shm_buffer_is_empty(&buffer));
 }
 
