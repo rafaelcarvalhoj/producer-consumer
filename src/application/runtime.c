@@ -144,6 +144,7 @@ static int run_command_loop(void *context, WorkerManager *manager,
 
     if (process_command(context, manager, paradigm, cmd) == -1) {
       perror("[MAIN] Erro processando comando");
+      exit_status = EXIT_FAILURE;
     }
 
     free_command(cmd);
@@ -192,9 +193,9 @@ int application_run(const ProgramArguments *args) {
      * context = &msg_context;
      * context_initialized = true;
      */
-    errno = ENOSYS;
-    perror("[MAIN] Paradigma ainda não implementado");
-    return EXIT_FAILURE;
+    context = NULL;
+    context_initialized = false;
+    break;
 
   default:
     errno = EINVAL;

@@ -17,8 +17,11 @@ run_test() {
     echo "TEST: $name"
     echo "======================================"
 
-    printf "%s\n" "$input" |
-        timeout 5s "$APP" "$producers" "$paradigm" \
+    {
+      printf "%s\n" "$input"
+      sleep 1
+      printf "shutdown\n"
+    } | timeout 10s "$APP" "$producers" "$paradigm" \
         > "$OUTPUT_DIR/$name.log" 2>&1
 
     local status=$?
@@ -65,22 +68,22 @@ check_sequences() {
 }
 
 run_test "production_simple" 3 1 \
-    $'produz 1 1 2 &\nshutdown'
+    $'produz 1 1 2 &'
 
 run_test "production_multiple" 3 1 \
-    $'produz 1 3 2 &\nproduz 2 3 2 &\nproduz 3 3 2 &\nshutdown'
+    $'produz 1 3 2 &\nproduz 2 3 2 &\nproduz 3 3 2 &'
 
 run_test "production_distributed" 3 1 \
-    $'produz 0 9 2 &\nshutdown'
+    $'produz 0 9 2 &'
 
 run_test "production_concurrent" 3 1 \
-    $'produz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nshutdown'
+    $'produz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &'
 
 run_test "production_stress_same_channel" 3 1 \
-    $'produz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nshutdown'
+    $'produz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &'
 
 run_test "production_stress_all_channels" 3 1 \
-    $'produz 1 25 2 &\nproduz 2 25 2 &\nproduz 3 25 2 &\nshutdown'
+    $'produz 1 25 2 &\nproduz 2 25 2 &\nproduz 3 25 2 &'
 
 check_sequences "$OUTPUT_DIR/production_stress_same_channel.log" 80
 check_sequences "$OUTPUT_DIR/production_stress_all_channels.log" 75

@@ -144,13 +144,18 @@ void worker_manager_destroy(WorkerManager *manager) {
 int worker_manager_zombie_kill(WorkerManager *manager) {
   WorkerInfo *workers = manager->workers;
 
-  if (workers == NULL || manager->workers == NULL) {
+  if (manager == NULL) {
     errno = EINVAL;
     return -1;
   }
 
   if (manager->count == 0) {
     return 0;
+  }
+
+  if (manager->workers == NULL) {
+    errno = EINVAL;
+    return -1;
   }
 
   int killed = 0;

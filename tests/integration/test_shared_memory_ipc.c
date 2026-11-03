@@ -2,6 +2,7 @@
 #include "application/shm/shared_memory_paradigm.h"
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <sys/shm.h>
 
@@ -28,7 +29,7 @@ void test_shm_channel_transfers_message(void) {
   SharedMemoryMessage received = {0};
 
   assert(shm_channel_send(&channel, &sent) == 0);
-  assert(shm_channel_receive(&channel, &received) == 0);
+  assert(shm_channel_receive(&channel, &received, false) == 0);
 
   assert(received.pid == sent.pid);
   assert(received.sequence == sent.sequence);
