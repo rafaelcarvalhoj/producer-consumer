@@ -20,6 +20,6 @@ int worker_manager_shutdown(WorkerManager *manager, bool *all_stopped);
 
 void worker_manager_destroy(WorkerManager *manager);
 
-int worker_manager_reap(WorkerInfo *workers, size_t count);
+int worker_manager_zombie_kill(WorkerManager *manager);
 
 #endif

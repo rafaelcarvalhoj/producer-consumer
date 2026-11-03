@@ -140,3 +140,62 @@ void worker_manager_destroy(WorkerManager *manager) {
   manager->count = 0;
   manager->capacity = 0;
 }
+
+int worker_manager_zombie_kill(WorkerManager *manager) {
+  WorkerInfo *workers = manager->workers;
+
+  if (workers == NULL || manager->workers == NULL) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  if (manager->count == 0) {
+    return 0;
+  }
+
+  int killed = 0;
+
+  for (size_t i = 0; i < manager->count;) {
+    int status;
+    pid_t result;
+
+    do {
+      result = waitpid(workers[i].pid, &status, WNOHANG);
+    } while (result == -1 && errno == EINTR);
+
+    if (result == 0) {
+      i++;
+      continue;
+    }
+
+    if (result == -1) {
+      if (errno == ECHILD) {
+        i++;
+        continue;
+      }
+
+      return -1;
+    }
+
+    printf("[MAIN] Processo filho encerrado: PID=%d", result);
+
+    if (WIFEXITED(status)) {
+      printf(", código de saída=%d\n", WEXITSTATUS(status));
+    } else if (WIFSIGNALED(status)) {
+      printf(", sinal=%d\n", WTERMSIG(status));
+    } else {
+      printf("\n");
+    }
+
+    if (workers[i].ack_semid >= 0) {
+      ack_semaphore_destroy(workers[i].ack_semid);
+    }
+
+    workers[i] = workers[manager->count - 1];
+    manager->count--;
+
+    killed++;
+  }
+
+  return killed;
+}

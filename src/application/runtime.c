@@ -104,6 +104,10 @@ static int run_command_loop(void *context, WorkerManager *manager,
   while (!shutdown_requested) {
     errno = 0;
 
+    if (worker_manager_zombie_kill(manager) == -1) {
+      perror("[MAIN] Erro recolhendo processos filhos");
+    }
+
     ProgramCommand *cmd = next_command();
 
     if (shutdown_requested) {
