@@ -12,7 +12,8 @@
 typedef struct {
   pid_t pid;
   uint32_t sequence;
-  struct timespec timestamp;
+  time_t timestamp; // timestamp em nanossegundos
+  int ack_semid;    // -1: sem ack; >= 0: id do semáforo de ack
 } SharedMemoryMessage;
 
 /*

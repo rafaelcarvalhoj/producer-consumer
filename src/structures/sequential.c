@@ -3,6 +3,7 @@
 #include "infrastructure/unix/semaphore.h"
 #include "infrastructure/unix/shared_memory.h"
 #include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
@@ -17,7 +18,7 @@ int sequential_init(GlobalSequential *sequenciador) {
   sequenciador->idsem = -1;
   sequenciador->next_seq = NULL;
 
-  sequenciador->idshm = shm_create(sizeof(int));
+  sequenciador->idshm = shm_create(sizeof(uint32_t));
 
   if (sequenciador->idshm < 0) {
     perror("shmget sequenciador");
