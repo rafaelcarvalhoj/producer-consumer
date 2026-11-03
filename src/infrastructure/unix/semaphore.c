@@ -44,8 +44,13 @@ int semaphore_create(int initial_value) {
   return id;
 }
 
-static int semaphore_operate(int semaphore_id, short operation) {
-  struct sembuf op = {.sem_num = 0, .sem_op = operation, .sem_flg = 0};
+static int semaphore_operate(int semaphore_id, short operation, short flags) {
+  if (semaphore_id < 0) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  struct sembuf op = {.sem_num = 0, .sem_op = operation, .sem_flg = flags};
 
   while (semop(semaphore_id, &op, 1) == -1) {
     if (errno == EINTR) {
@@ -59,11 +64,48 @@ static int semaphore_operate(int semaphore_id, short operation) {
 }
 
 int semaphore_p(int semaphore_id) {
-  return semaphore_operate(semaphore_id, -1);
+  return semaphore_operate(semaphore_id, -1, 0);
 }
 
-int semaphore_v(int semaphore_id) { return semaphore_operate(semaphore_id, 1); }
+int semaphore_try_p(int semaphore_id) {
+  return semaphore_operate(semaphore_id, -1, IPC_NOWAIT);
+}
+
+int semaphore_v(int semaphore_id) {
+  return semaphore_operate(semaphore_id, 1, 0);
+}
 
 int semaphore_destroy(int semaphore_id) {
-  return semctl(semaphore_id, 0, IPC_RMID);
+  if (semaphore_id < 0) {
+    return 0;
+  }
+
+  if (semctl(semaphore_id, 0, IPC_RMID) == -1) {
+    if (errno == EIDRM || errno == EINVAL) {
+      return 0;
+    }
+
+    return -1;
+  }
+
+  return 0;
 }
+
+int ack_semaphore_create(void) { return semaphore_create(0); }
+
+int ack_semaphore_signal(int semid) { return semaphore_v(semid); }
+
+int ack_semaphore_wait_n(int semid, unsigned int amount) {
+  if (semid < 0 || amount > SHRT_MAX) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  if (amount == 0) {
+    return 0;
+  }
+
+  return semaphore_operate(semid, -(short)amount, 0);
+}
+
+int ack_semaphore_destroy(int semid) { return semaphore_destroy(semid); }
