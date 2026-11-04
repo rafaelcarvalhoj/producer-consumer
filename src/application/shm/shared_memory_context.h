@@ -10,6 +10,8 @@ typedef struct {
   SharedMemoryChannel *channels;
 
   GlobalSequential sequential;
+  int counters_shmid;
+  uint64_t *consumed_counts;
 } SharedMemoryContext;
 
 int shm_context_init(SharedMemoryContext *context, int producers);

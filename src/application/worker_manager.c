@@ -9,6 +9,36 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 
+static double elapsed_seconds(struct timespec start, struct timespec end) {
+  return (double)(end.tv_sec - start.tv_sec) +
+         (double)(end.tv_nsec - start.tv_nsec) / 1e9;
+}
+
+static void report_worker_exit(const WorkerInfo *worker, int status) {
+  struct timespec finished_at;
+
+  if (clock_gettime(CLOCK_MONOTONIC, &finished_at) == -1) {
+    perror("[MAIN] Erro obtendo tempo de encerramento");
+    return;
+  }
+
+  double duration = elapsed_seconds(worker->started_at, finished_at);
+
+  const char *operation = worker->operation == 0   ? "PRODUTOR"
+                          : worker->operation == 1 ? "CONSUMIDOR"
+                                                   : "WORKER";
+
+  printf("[MAIN] %s PID=%d: %.6f segundos; ", operation, worker->pid, duration);
+
+  if (WIFEXITED(status)) {
+    printf("código de saída=%d\n", WEXITSTATUS(status));
+  } else if (WIFSIGNALED(status)) {
+    printf("interrompido pelo sinal %d\n", WTERMSIG(status));
+  } else {
+    printf("status não convencional\n");
+  }
+}
+
 void worker_manager_init(WorkerManager *manager) {
   if (manager == NULL) {
     return;
@@ -19,9 +49,15 @@ void worker_manager_init(WorkerManager *manager) {
   manager->capacity = 0;
 }
 
-int worker_manager_register(WorkerManager *manager, pid_t pid, int ack_semid) {
+int worker_manager_register(WorkerManager *manager, pid_t pid, int ack_semid,
+                            int operation) {
   if (manager == NULL || pid <= 0 || ack_semid < -1) {
     errno = EINVAL;
+    return -1;
+  }
+
+  struct timespec started_at;
+  if (clock_gettime(CLOCK_MONOTONIC, &started_at) == -1) {
     return -1;
   }
 
@@ -39,8 +75,10 @@ int worker_manager_register(WorkerManager *manager, pid_t pid, int ack_semid) {
     manager->capacity = new_capacity;
   }
 
-  manager->workers[manager->count++] =
-      (WorkerInfo){.pid = pid, .ack_semid = ack_semid};
+  manager->workers[manager->count++] = (WorkerInfo){.pid = pid,
+                                                    .ack_semid = ack_semid,
+                                                    .operation = operation,
+                                                    .started_at = started_at};
 
   return 0;
 }
@@ -56,24 +94,22 @@ int worker_manager_shutdown(WorkerManager *manager, bool *all_stopped) {
   int first_errno = 0;
 
   for (size_t i = 0; i < manager->count; i++) {
-    pid_t pid = manager->workers[i].pid;
-
-    if (kill(pid, SIGTERM) == -1 && errno != ESRCH) {
+    if (kill(manager->workers[i].pid, SIGTERM) == -1 && errno != ESRCH) {
       if (first_errno == 0) {
         first_errno = errno;
       }
     }
   }
 
-  /*
-   * Depois, aguarda todos os filhos.
-   */
+  size_t remaining = 0;
+
   for (size_t i = 0; i < manager->count; i++) {
+    WorkerInfo worker = manager->workers[i];
     int status;
     pid_t pid;
 
     do {
-      pid = waitpid(manager->workers[i].pid, &status, 0);
+      pid = waitpid(worker.pid, &status, 0);
     } while (pid == -1 && errno == EINTR);
 
     if (pid == -1) {
@@ -85,46 +121,28 @@ int worker_manager_shutdown(WorkerManager *manager, bool *all_stopped) {
         first_errno = errno;
       }
 
+      // Não conseguimos confirmar o encerramento.
+      manager->workers[remaining++] = worker;
       continue;
     }
 
-    if (WIFEXITED(status)) {
-      printf("[MAIN] Filho %d terminou com código %d\n", pid,
-             WEXITSTATUS(status));
-    } else if (WIFSIGNALED(status)) {
-      printf("[MAIN] Filho %d terminou pelo sinal %d\n", pid, WTERMSIG(status));
+    if (pid > 0) {
+      report_worker_exit(&worker, status);
+    }
+
+    if (worker.ack_semid >= 0 &&
+        ack_semaphore_destroy(worker.ack_semid) == -1 && first_errno == 0) {
+      first_errno = errno;
     }
   }
+
+  manager->count = remaining;
+  *all_stopped = (remaining == 0);
 
   if (first_errno != 0) {
     errno = first_errno;
     return -1;
   }
-
-  *all_stopped = true;
-
-  for (size_t i = 0; i < manager->count; i++) {
-    int semid = manager->workers[i].ack_semid;
-
-    if (semid < 0) {
-      continue;
-    }
-
-    if (ack_semaphore_destroy(semid) == -1) {
-      if (first_errno == 0) {
-        first_errno = errno;
-      }
-
-      perror("[MAIN] Erro removendo semáforo de ACK");
-    }
-  }
-
-  if (first_errno != 0) {
-    errno = first_errno;
-    return -1;
-  }
-
-  manager->count = 0;
 
   return 0;
 }
@@ -162,18 +180,18 @@ int worker_manager_zombie_kill(WorkerManager *manager) {
 
   for (size_t i = 0; i < manager->count;) {
     int status;
-    pid_t result;
+    pid_t pid;
 
     do {
-      result = waitpid(workers[i].pid, &status, WNOHANG);
-    } while (result == -1 && errno == EINTR);
+      pid = waitpid(workers[i].pid, &status, WNOHANG);
+    } while (pid == -1 && errno == EINTR);
 
-    if (result == 0) {
+    if (pid == 0) {
       i++;
       continue;
     }
 
-    if (result == -1) {
+    if (pid == -1) {
       if (errno == ECHILD) {
         i++;
         continue;
@@ -182,14 +200,10 @@ int worker_manager_zombie_kill(WorkerManager *manager) {
       return -1;
     }
 
-    printf("[MAIN] Processo filho encerrado: PID=%d", result);
+    printf("[MAIN] Processo filho encerrado: PID=%d", pid);
 
-    if (WIFEXITED(status)) {
-      printf(", código de saída=%d\n", WEXITSTATUS(status));
-    } else if (WIFSIGNALED(status)) {
-      printf(", sinal=%d\n", WTERMSIG(status));
-    } else {
-      printf("\n");
+    if (pid > 0) {
+      report_worker_exit(&workers[i], status);
     }
 
     if (workers[i].ack_semid >= 0) {

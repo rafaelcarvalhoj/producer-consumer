@@ -5,6 +5,7 @@
 #include "structures/sequential.h"
 
 #include <errno.h>
+#include <string.h>
 
 static int channel_is_valid(const SharedMemoryChannel *channel) {
   return channel != NULL && channel->shmid >= 0 && channel->sem_empty >= 0 &&
@@ -23,6 +24,7 @@ int shm_channel_create(SharedMemoryChannel *channel) {
   channel->sem_full = -1;
   channel->sem_mutex = -1;
   channel->buffer = NULL;
+  channel->consumed_count = NULL;
 
   channel->shmid = shm_create(SHM_SEGMENT_SIZE);
   if (channel->shmid == -1) {
@@ -140,7 +142,8 @@ int shm_channel_send(SharedMemoryChannel *channel, SharedMemoryMessage *message,
 
 int shm_channel_receive(SharedMemoryChannel *channel,
                         SharedMemoryMessage *message, int blocking) {
-  if (!channel_is_valid(channel) || message == NULL) {
+  if (!channel_is_valid(channel) || message == NULL ||
+      channel->consumed_count == NULL) {
     errno = EINVAL;
     return -1;
   }
@@ -165,6 +168,8 @@ int shm_channel_receive(SharedMemoryChannel *channel,
     errno = EIO;
     return -1;
   }
+
+  (*channel->consumed_count)++;
 
   int mutex_result = semaphore_v(channel->sem_mutex);
   int mutex_errno = errno;
@@ -191,6 +196,7 @@ int shm_channel_destroy(SharedMemoryChannel *channel) {
     return -1;
   }
 
+  channel->consumed_count = NULL;
   int first_errno = 0;
 
   if (channel->buffer != NULL) {

@@ -3,6 +3,7 @@
 #include "application/shm/shared_memory_context.h"
 #include "application/shm/shared_memory_process.h"
 #include "application/worker_manager.h"
+#include <inttypes.h>
 
 #include "cli/command_parser.h"
 
@@ -39,6 +40,30 @@ static void startup_log(const ProgramArguments *args) {
   puts("Producer-Consumer");
   printf("Producers: %d\n", args->producers);
   printf("Paradigm: %s\n", paradigm_to_str(args->paradigm));
+}
+
+static void print_consumption_stats(const SharedMemoryContext *context) {
+
+  puts("\n======================================");
+  puts("       MENSAGENS CONSUMIDAS");
+  puts("======================================");
+
+  uint64_t total = 0;
+
+  for (int i = 0; i < context->n_channels; i++) {
+    uint64_t count = context->channels[i].consumed_count[0];
+
+    printf("Canal %d: %" PRIu64 " mensagens\n", i + 1, count);
+
+    total += count;
+  }
+
+  printf("TOTAL: %" PRIu64 " mensagens\n", total);
+}
+
+static double elapsed_seconds(struct timespec start, struct timespec end) {
+  return (double)(end.tv_sec - start.tv_sec) +
+         (double)(end.tv_nsec - start.tv_nsec) / 1e9;
 }
 
 static void terminate_unregistered_child(pid_t pid, int ack_semid) {
@@ -85,7 +110,7 @@ static int process_command(void *context, WorkerManager *manager,
     return -1;
   }
 
-  if (worker_manager_register(manager, child_pid, ack_semid) == -1) {
+  if (worker_manager_register(manager, child_pid, ack_semid, cmd->op) == -1) {
     terminate_unregistered_child(child_pid, ack_semid);
     return -1;
   }
@@ -164,6 +189,13 @@ int application_run(const ProgramArguments *args) {
     return EXIT_FAILURE;
   }
 
+  struct timespec application_started_at;
+
+  if (clock_gettime(CLOCK_MONOTONIC, &application_started_at) == -1) {
+    perror("[MAIN] Erro obtendo tempo inicial");
+    return EXIT_FAILURE;
+  }
+
   startup_log(args);
 
   SharedMemoryContext shm_context = {0};
@@ -219,30 +251,34 @@ int application_run(const ProgramArguments *args) {
     exit_status = EXIT_FAILURE;
   }
 
-  if (all_workers_stopped && context_initialized) {
-    switch (args->paradigm) {
-    case SHARED_MEMORY:
+  if (all_workers_stopped) {
+    if (args->paradigm == SHARED_MEMORY && context_initialized) {
+
+      // As estatísticas precisam ser impressas antes da destruição.
+      print_consumption_stats(&shm_context);
+
       if (shm_context_destroy(&shm_context) == -1) {
-        perror("[MAIN] Erro destruindo contexto SHM");
+        perror("[MAIN] Erro destruindo contexto");
         exit_status = EXIT_FAILURE;
       }
-      break;
-
-    case MESSAGE_EXCHANGE:
-      /*
-       * msg_context_destroy(&msg_context);
-       */
-      break;
-
-    default:
-      break;
     }
+
+    worker_manager_destroy(&manager);
+  } else {
+    fprintf(stderr, "[MAIN] Não foi possível confirmar o encerramento "
+                    "de todos os filhos.\n");
+
+    exit_status = EXIT_FAILURE;
   }
 
-  worker_manager_destroy(&manager);
+  struct timespec application_finished_at;
 
-  if (!all_workers_stopped) {
-    return EXIT_FAILURE;
+  if (clock_gettime(CLOCK_MONOTONIC, &application_finished_at) == -1) {
+    perror("[MAIN] Erro obtendo tempo final");
+    exit_status = EXIT_FAILURE;
+  } else {
+    printf("\n[MAIN] Tempo total de execução: %.6f segundos\n",
+           elapsed_seconds(application_started_at, application_finished_at));
   }
 
   return exit_status;

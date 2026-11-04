@@ -11,6 +11,7 @@ typedef struct {
   int sem_full;
   int sem_mutex;
   SharedMemoryBuffer *buffer;
+  uint64_t *consumed_count;
 } SharedMemoryChannel;
 
 /*
