@@ -2,6 +2,7 @@
 #include "application/shm/shared_memory_paradigm.h"
 #include "infrastructure/unix/semaphore.h"
 #include "infrastructure/unix/shared_memory.h"
+#include "structures/sequential.h"
 
 #include <errno.h>
 
@@ -62,9 +63,10 @@ failure:
   return -1;
 }
 
-int shm_channel_send(SharedMemoryChannel *channel,
-                     const SharedMemoryMessage *message) {
-  if (!channel_is_valid(channel) || message == NULL) {
+int shm_channel_send(SharedMemoryChannel *channel, SharedMemoryMessage *message,
+                     GlobalSequential *sequenciador) {
+  if (!channel_is_valid(channel) || message == NULL || sequenciador == NULL ||
+      sequenciador->next_seq == NULL || sequenciador->idsem < 0) {
     errno = EINVAL;
     return -1;
   }
@@ -73,33 +75,63 @@ int shm_channel_send(SharedMemoryChannel *channel,
     return -1;
   }
 
-  if (semaphore_p(channel->sem_mutex) == -1) {
+  if (semaphore_p(sequenciador->idsem) == -1) {
     int saved_errno = errno;
     (void)semaphore_v(channel->sem_empty);
     errno = saved_errno;
     return -1;
   }
 
-  if (shm_buffer_push(channel->buffer, message) == -1) {
-    (void)semaphore_v(channel->sem_mutex);
+  if (semaphore_p(channel->sem_mutex) == -1) {
+    int saved_errno = errno;
+    (void)semaphore_v(sequenciador->idsem);
     (void)semaphore_v(channel->sem_empty);
-    errno = EIO;
+    errno = saved_errno;
     return -1;
   }
 
-  int mutex_result = semaphore_v(channel->sem_mutex);
-  int mutex_errno = errno;
+  int inserted = 0;
+  int first_error = 0;
 
-  int full_result = semaphore_v(channel->sem_full);
-  int full_errno = errno;
+  uint32_t next_sequence = *sequenciador->next_seq;
 
-  if (mutex_result == -1) {
-    errno = mutex_errno;
-    return -1;
+  if (next_sequence == 0) {
+    first_error = EOVERFLOW;
+  } else {
+
+    SharedMemoryMessage msg = *message;
+
+    msg.sequence = next_sequence;
+
+    if (shm_buffer_push(channel->buffer, &msg) == -1) {
+      first_error = EIO;
+    } else {
+      *sequenciador->next_seq = next_sequence + 1;
+      message->sequence = next_sequence;
+      inserted = 1;
+    }
   }
 
-  if (full_result == -1) {
-    errno = full_errno;
+  if (semaphore_v(channel->sem_mutex) == -1 && first_error == 0) {
+    first_error = errno;
+  }
+
+  if (semaphore_v(sequenciador->idsem) == -1 && first_error == 0) {
+    first_error = errno;
+  }
+
+  if (inserted) {
+    if (semaphore_v(channel->sem_full) == -1 && first_error == 0) {
+      first_error = errno;
+    }
+  } else {
+    if (semaphore_v(channel->sem_empty) == -1 && first_error == 0) {
+      first_error = errno;
+    }
+  }
+
+  if (first_error != 0) {
+    errno = first_error;
     return -1;
   }
 

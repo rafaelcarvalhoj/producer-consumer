@@ -3,7 +3,6 @@
 #include "infrastructure/unix/semaphore.h"
 #include "shared_memory_context.h"
 #include "structures/program_command.h"
-#include "structures/sequential.h"
 #include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -22,16 +21,7 @@ static int shm_produce(SharedMemoryContext *context, const ProgramCommand *cmd,
   int saved_errno = 0;
 
   for (int i = 0; i < cmd->n_msgs; i++) {
-    uint32_t sequence;
-
-    if (sequential_next(&context->sequential, &sequence) == -1) {
-      result = -1;
-      saved_errno = errno;
-      break;
-    }
-
-    SharedMemoryMessage msg = {
-        .pid = getpid(), .sequence = sequence, .ack_semid = ack_semid};
+    SharedMemoryMessage msg = {.pid = getpid(), .ack_semid = ack_semid};
 
     struct timespec ts;
 
@@ -46,7 +36,8 @@ static int shm_produce(SharedMemoryContext *context, const ProgramCommand *cmd,
 
     int channel_index = cmd->p == 0 ? i % context->n_channels : cmd->p - 1;
 
-    if (shm_channel_send(&context->channels[channel_index], &msg) == -1) {
+    if (shm_channel_send(&context->channels[channel_index], &msg,
+                         &context->sequential) == -1) {
       result = -1;
       saved_errno = errno;
       break;
@@ -54,8 +45,8 @@ static int shm_produce(SharedMemoryContext *context, const ProgramCommand *cmd,
 
     published++;
 
-    printf("[PRODUCER %d] Mensagem seq=%u -> canal=%d\n", getpid(), sequence,
-           channel_index + 1);
+    printf("[PRODUCER %d] Mensagem seq=%u -> canal=%d\n", getpid(),
+           msg.sequence, channel_index + 1);
     fflush(stdout);
   }
 

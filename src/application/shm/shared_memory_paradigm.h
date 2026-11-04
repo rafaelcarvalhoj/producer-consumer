@@ -2,6 +2,7 @@
 #ifndef SHARED_MEMORY_PARADIGM_H
 #define SHARED_MEMORY_PARADIGM_H
 
+#include "structures/sequential.h"
 #include "structures/shared_memory_buffer.h"
 
 typedef struct {
@@ -22,8 +23,8 @@ int shm_channel_create(SharedMemoryChannel *channel);
  * Envia uma mensagem para o buffer.
  * Pode bloquear enquanto não houver espaço livre.
  */
-int shm_channel_send(SharedMemoryChannel *channel,
-                     const SharedMemoryMessage *message);
+int shm_channel_send(SharedMemoryChannel *channel, SharedMemoryMessage *message,
+                     GlobalSequential *sequenciador);
 
 /*
  * Recebe a mensagem mais antiga do buffer.
