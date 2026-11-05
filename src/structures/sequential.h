@@ -11,7 +11,7 @@ typedef struct {
 
 int sequential_init(GlobalSequential *sequenciador);
 
-void sequential_destroy(GlobalSequential *sequenciador);
+int sequential_destroy(GlobalSequential *sequenciador);
 
 int sequential_next(GlobalSequential *sequenciador, uint32_t *sequence);
 

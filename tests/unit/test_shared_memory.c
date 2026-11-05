@@ -141,7 +141,7 @@ static void test_create_passes_size_and_permissions(void) {
   assert(shmget_calls == 1);
   assert(shmget_key == IPC_PRIVATE);
   assert(shmget_size == 2048);
-  assert(shmget_flags == (IPC_CREAT | 0600));
+  assert(shmget_flags == (0600));
 }
 
 static void test_create_rejects_zero_size(void) {

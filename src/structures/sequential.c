@@ -59,9 +59,10 @@ int sequential_init(GlobalSequential *sequenciador) {
   return 0;
 }
 
-void sequential_destroy(GlobalSequential *sequenciador) {
+int sequential_destroy(GlobalSequential *sequenciador) {
   if (sequenciador == NULL) {
-    return;
+    errno = EINVAL;
+    return -1;
   }
 
   if (sequenciador->next_seq != NULL) {
@@ -78,6 +79,8 @@ void sequential_destroy(GlobalSequential *sequenciador) {
     shm_remove(sequenciador->idshm);
     sequenciador->idshm = -1;
   }
+
+  return 0;
 }
 
 int sequential_next(GlobalSequential *sequenciador, uint32_t *sequence) {

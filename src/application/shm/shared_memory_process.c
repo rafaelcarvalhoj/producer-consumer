@@ -1,11 +1,10 @@
 #include "application/shm/shared_memory_context.h"
 #include "application/shm/shared_memory_paradigm.h"
 #include "infrastructure/unix/semaphore.h"
-#include "shared_memory_context.h"
 #include "structures/program_command.h"
+
 #include <errno.h>
 #include <signal.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -17,8 +16,7 @@ static int shm_produce(SharedMemoryContext *context, const ProgramCommand *cmd,
   fflush(stdout);
 
   int published = 0;
-  int result = 0;
-  int saved_errno = 0;
+  int production_error = 0;
 
   for (int i = 0; i < cmd->n_msgs; i++) {
     SharedMemoryMessage msg = {.pid = getpid(), .ack_semid = ack_semid};
@@ -26,8 +24,7 @@ static int shm_produce(SharedMemoryContext *context, const ProgramCommand *cmd,
     struct timespec ts;
 
     if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
-      result = -1;
-      saved_errno = errno;
+      production_error = errno;
       break;
     }
 
@@ -38,8 +35,7 @@ static int shm_produce(SharedMemoryContext *context, const ProgramCommand *cmd,
 
     if (shm_channel_send(&context->channels[channel_index], &msg,
                          &context->sequential) == -1) {
-      result = -1;
-      saved_errno = errno;
+      production_error = errno;
       break;
     }
 
@@ -55,25 +51,23 @@ static int shm_produce(SharedMemoryContext *context, const ProgramCommand *cmd,
            published);
     fflush(stdout);
 
-    if (ack_semid >= 0) {
-      if (ack_semaphore_wait_n(ack_semid, published) == -1) {
-        return -1;
-      }
-    }
+    if (ack_semaphore_wait_n(ack_semid, published) == -1)
+      return -1;
 
     printf("[PRODUCER %d] Todas as mensagens foram consumidas\n", getpid());
     fflush(stdout);
   }
 
-  if (result == -1) {
-    errno = saved_errno;
+  if (production_error != 0) {
+    errno = production_error;
+    return -1;
   }
 
-  return result;
+  return 0;
 }
 
-static int shm_consume(SharedMemoryContext *context, const ProgramCommand *cmd,
-                       bool blocking) {
+static int shm_consume(SharedMemoryContext *context,
+                       const ProgramCommand *cmd) {
   int consumed = 0;
 
   printf("[CONSUMER %d] Solicitadas %d mensagens (ACK=%d)\n", getpid(),
@@ -83,35 +77,32 @@ static int shm_consume(SharedMemoryContext *context, const ProgramCommand *cmd,
   while (consumed < cmd->n_msgs) {
     SharedMemoryMessage msg;
 
-    if (shm_channel_receive(&context->channels[cmd->p - 1], &msg, blocking) ==
-        -1) {
-      if (cmd->ack == 2 && errno == EAGAIN) {
+    if (shm_channel_receive(&context->channels[cmd->p - 1], &msg,
+                            cmd->ack == 1) == -1) {
+
+      if (cmd->ack == 2 && errno == EAGAIN)
         break;
-      }
 
       return -1;
     }
 
     consumed++;
 
-    if (msg.ack_semid >= 0) {
-      if (ack_semaphore_signal(msg.ack_semid) == -1) {
-        return -1;
-      }
-    }
+    if (msg.ack_semid >= 0 && ack_semaphore_signal(msg.ack_semid) == -1)
+      return -1;
 
     printf("[CONSUMER %d] Mensagem seq=%u, produtor=%d\n", getpid(),
            msg.sequence, msg.pid);
     fflush(stdout);
   }
 
+  // TODO: Consumo até não dar ou dou erro antes
+  // mesmo de começar a consumir???
   if (consumed < cmd->n_msgs) {
     fprintf(stderr,
             "[CONSUMER %d] Erro: solicitadas %d mensagens, "
             "mas apenas %d foram consumidas.\n",
             getpid(), cmd->n_msgs, consumed);
-    fflush(stderr);
-
     errno = ENOMSG;
     return -1;
   }
@@ -124,8 +115,9 @@ static int shm_consume(SharedMemoryContext *context, const ProgramCommand *cmd,
 
 int shm_process(SharedMemoryContext *context, const ProgramCommand *cmd,
                 pid_t *child_pid, int *ack_semid_out) {
-  if (context == NULL || context->channels == NULL || cmd == NULL ||
-      child_pid == NULL || ack_semid_out == NULL) {
+  if (context == NULL || context->channels == NULL ||
+      context->n_channels <= 0 || cmd == NULL || child_pid == NULL ||
+      ack_semid_out == NULL) {
     errno = EINVAL;
     return -1;
   }
@@ -158,9 +150,8 @@ int shm_process(SharedMemoryContext *context, const ProgramCommand *cmd,
   if (cmd->op == PRODUCE && cmd->ack == 1) {
     ack_semid = ack_semaphore_create();
 
-    if (ack_semid == -1) {
+    if (ack_semid == -1)
       return -1;
-    }
   }
 
   fflush(NULL);
@@ -180,25 +171,11 @@ int shm_process(SharedMemoryContext *context, const ProgramCommand *cmd,
     action.sa_handler = SIG_IGN;
     sigemptyset(&action.sa_mask);
 
-    if (sigaction(SIGINT, &action, NULL) == -1) {
+    if (sigaction(SIGINT, &action, NULL) == -1)
       _exit(EXIT_FAILURE);
-    }
 
-    int result;
-
-    switch (cmd->op) {
-    case PRODUCE:
-      result = shm_produce(context, cmd, ack_semid);
-      break;
-
-    case CONSUME:
-      bool blocking = (cmd->ack == 1);
-      result = shm_consume(context, cmd, blocking);
-      break;
-
-    default:
-      _exit(EXIT_FAILURE);
-    }
+    int result = cmd->op == PRODUCE ? shm_produce(context, cmd, ack_semid)
+                                    : shm_consume(context, cmd);
 
     _exit(result == 0 ? EXIT_SUCCESS : EXIT_FAILURE);
   }

@@ -19,50 +19,44 @@ int shm_channel_create(SharedMemoryChannel *channel) {
     return -1;
   }
 
-  channel->shmid = -1;
-  channel->sem_empty = -1;
-  channel->sem_full = -1;
-  channel->sem_mutex = -1;
-  channel->buffer = NULL;
-  channel->consumed_count = NULL;
+  *channel = (SharedMemoryChannel){.shmid = -1,
+                                   .sem_empty = -1,
+                                   .sem_full = -1,
+                                   .sem_mutex = -1,
+                                   .buffer = NULL,
+                                   .consumed_count = NULL};
 
   channel->shmid = shm_create(SHM_SEGMENT_SIZE);
-  if (channel->shmid == -1) {
+  if (channel->shmid == -1)
     goto failure;
-  }
 
   channel->buffer = shm_attach(channel->shmid);
-  if (channel->buffer == NULL) {
+  if (channel->buffer == NULL)
     goto failure;
-  }
 
   shm_buffer_init(channel->buffer);
 
-  channel->sem_empty = semaphore_create((int)SHM_BUFFER_CAPACITY);
-  if (channel->sem_empty == -1) {
+  channel->sem_empty = semaphore_create(SHM_BUFFER_CAPACITY);
+  if (channel->sem_empty == -1)
     goto failure;
-  }
 
   channel->sem_full = semaphore_create(0);
-  if (channel->sem_full == -1) {
+  if (channel->sem_full == -1)
     goto failure;
-  }
 
   channel->sem_mutex = semaphore_create(1);
-  if (channel->sem_mutex == -1) {
+  if (channel->sem_mutex == -1)
     goto failure;
-  }
 
   return 0;
 
 failure:
   {
     int saved_errno = errno;
-    (void)shm_channel_destroy(channel);
+    shm_channel_destroy(channel);
     errno = saved_errno;
+    return -1;
   }
-
-  return -1;
 }
 
 int shm_channel_send(SharedMemoryChannel *channel, SharedMemoryMessage *message,
@@ -73,67 +67,58 @@ int shm_channel_send(SharedMemoryChannel *channel, SharedMemoryMessage *message,
     return -1;
   }
 
-  if (semaphore_p(channel->sem_empty) == -1) {
+  if (semaphore_p(channel->sem_empty) == -1)
     return -1;
-  }
 
   if (semaphore_p(sequenciador->idsem) == -1) {
     int saved_errno = errno;
-    (void)semaphore_v(channel->sem_empty);
+    semaphore_v(channel->sem_empty);
     errno = saved_errno;
     return -1;
   }
 
   if (semaphore_p(channel->sem_mutex) == -1) {
     int saved_errno = errno;
-    (void)semaphore_v(sequenciador->idsem);
-    (void)semaphore_v(channel->sem_empty);
+    semaphore_v(sequenciador->idsem);
+    semaphore_v(channel->sem_empty);
     errno = saved_errno;
     return -1;
   }
 
   int inserted = 0;
-  int first_error = 0;
+  int error = 0;
 
-  uint32_t next_sequence = *sequenciador->next_seq;
+  uint32_t sequence = *sequenciador->next_seq;
 
-  if (next_sequence == 0) {
-    first_error = EOVERFLOW;
+  if (sequence == 0) {
+    error = EOVERFLOW;
   } else {
+    SharedMemoryMessage queued_message = *message;
+    queued_message.sequence = sequence;
 
-    SharedMemoryMessage msg = *message;
-
-    msg.sequence = next_sequence;
-
-    if (shm_buffer_push(channel->buffer, &msg) == -1) {
-      first_error = EIO;
+    if (shm_buffer_push(channel->buffer, &queued_message) == -1) {
+      error = EIO;
     } else {
-      *sequenciador->next_seq = next_sequence + 1;
-      message->sequence = next_sequence;
+      *sequenciador->next_seq = sequence + 1;
+      message->sequence = sequence;
       inserted = 1;
     }
   }
 
-  if (semaphore_v(channel->sem_mutex) == -1 && first_error == 0) {
-    first_error = errno;
-  }
+  if (semaphore_v(channel->sem_mutex) == -1 && error == 0)
+    error = errno;
 
-  if (semaphore_v(sequenciador->idsem) == -1 && first_error == 0) {
-    first_error = errno;
-  }
+  if (semaphore_v(sequenciador->idsem) == -1 && error == 0)
+    error = errno;
 
-  if (inserted) {
-    if (semaphore_v(channel->sem_full) == -1 && first_error == 0) {
-      first_error = errno;
-    }
-  } else {
-    if (semaphore_v(channel->sem_empty) == -1 && first_error == 0) {
-      first_error = errno;
-    }
-  }
+  int sem_result = inserted ? semaphore_v(channel->sem_full)
+                            : semaphore_v(channel->sem_empty);
 
-  if (first_error != 0) {
-    errno = first_error;
+  if (sem_result == -1 && error == 0)
+    error = errno;
+
+  if (error != 0) {
+    errno = error;
     return -1;
   }
 
@@ -151,43 +136,33 @@ int shm_channel_receive(SharedMemoryChannel *channel,
   int result = blocking ? semaphore_p(channel->sem_full)
                         : semaphore_try_p(channel->sem_full);
 
-  if (result == -1) {
+  if (result == -1)
     return -1;
-  }
 
   if (semaphore_p(channel->sem_mutex) == -1) {
     int saved_errno = errno;
-    (void)semaphore_v(channel->sem_full);
+    semaphore_v(channel->sem_full);
     errno = saved_errno;
     return -1;
   }
 
   if (shm_buffer_pop(channel->buffer, message) == -1) {
-    (void)semaphore_v(channel->sem_mutex);
-    (void)semaphore_v(channel->sem_full);
+    semaphore_v(channel->sem_mutex);
+    semaphore_v(channel->sem_full);
     errno = EIO;
     return -1;
   }
 
   (*channel->consumed_count)++;
 
-  int mutex_result = semaphore_v(channel->sem_mutex);
-  int mutex_errno = errno;
-
-  int empty_result = semaphore_v(channel->sem_empty);
-  int empty_errno = errno;
-
-  if (mutex_result == -1) {
-    errno = mutex_errno;
+  if (semaphore_v(channel->sem_mutex) == -1) {
+    int saved_errno = errno;
+    semaphore_v(channel->sem_empty);
+    errno = saved_errno;
     return -1;
   }
 
-  if (empty_result == -1) {
-    errno = empty_errno;
-    return -1;
-  }
-
-  return 0;
+  return semaphore_v(channel->sem_empty);
 }
 
 int shm_channel_destroy(SharedMemoryChannel *channel) {
@@ -200,20 +175,16 @@ int shm_channel_destroy(SharedMemoryChannel *channel) {
   int first_errno = 0;
 
   if (channel->buffer != NULL) {
-    if (shm_detach(channel->buffer) == -1) {
-      if (first_errno == 0) {
-        first_errno = errno;
-      }
-    } else {
+    if (shm_detach(channel->buffer) == -1)
+      first_errno = errno;
+    else
       channel->buffer = NULL;
-    }
   }
 
   if (channel->shmid >= 0) {
     if (shm_remove(channel->shmid) == -1) {
-      if (first_errno == 0) {
+      if (first_errno == 0)
         first_errno = errno;
-      }
     } else {
       channel->shmid = -1;
     }
@@ -221,9 +192,8 @@ int shm_channel_destroy(SharedMemoryChannel *channel) {
 
   if (channel->sem_empty >= 0) {
     if (semaphore_destroy(channel->sem_empty) == -1) {
-      if (first_errno == 0) {
+      if (first_errno == 0)
         first_errno = errno;
-      }
     } else {
       channel->sem_empty = -1;
     }
@@ -231,9 +201,8 @@ int shm_channel_destroy(SharedMemoryChannel *channel) {
 
   if (channel->sem_full >= 0) {
     if (semaphore_destroy(channel->sem_full) == -1) {
-      if (first_errno == 0) {
+      if (first_errno == 0)
         first_errno = errno;
-      }
     } else {
       channel->sem_full = -1;
     }
@@ -241,9 +210,8 @@ int shm_channel_destroy(SharedMemoryChannel *channel) {
 
   if (channel->sem_mutex >= 0) {
     if (semaphore_destroy(channel->sem_mutex) == -1) {
-      if (first_errno == 0) {
+      if (first_errno == 0)
         first_errno = errno;
-      }
     } else {
       channel->sem_mutex = -1;
     }

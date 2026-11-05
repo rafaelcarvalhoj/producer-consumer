@@ -1,4 +1,3 @@
-
 #include "infrastructure/unix/shared_memory.h"
 
 #include <errno.h>
@@ -11,7 +10,7 @@ int shm_create(size_t size) {
     return -1;
   }
 
-  return shmget(IPC_PRIVATE, size, IPC_CREAT | 0600);
+  return shmget(IPC_PRIVATE, size, 0600);
 }
 
 void *shm_attach(int shmid) {
