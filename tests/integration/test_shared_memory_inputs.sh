@@ -29,6 +29,11 @@ run_test() {
     echo "Exit code: $status"
     echo "Log: $OUTPUT_DIR/$name.log"
     echo
+
+    if [ "$status" -ne 0 ]; then
+        echo "FAIL: $name terminou com código $status"
+        return 1
+    fi
 }
 
 check_sequences() {
@@ -67,23 +72,31 @@ check_sequences() {
     fi
 }
 
+FAILURES=0
+
 run_test "production_simple" 3 1 \
-    $'produz 1 1 2 &'
+    $'produz 1 1 2 &' || FAILURES=$((FAILURES + 1))
 
 run_test "production_multiple" 3 1 \
-    $'produz 1 3 2 &\nproduz 2 3 2 &\nproduz 3 3 2 &'
+    $'produz 1 3 2 &\nproduz 2 3 2 &\nproduz 3 3 2 &' || FAILURES=$((FAILURES + 1))
 
 run_test "production_distributed" 3 1 \
-    $'produz 0 9 2 &'
+    $'produz 0 9 2 &' || FAILURES=$((FAILURES + 1))
 
 run_test "production_concurrent" 3 1 \
-    $'produz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &'
+    $'produz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &' || FAILURES=$((FAILURES + 1))
 
 run_test "production_stress_same_channel" 3 1 \
-    $'produz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &'
+    $'produz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &\nproduz 1 10 2 &' || FAILURES=$((FAILURES + 1))
 
 run_test "production_stress_all_channels" 3 1 \
-    $'produz 1 25 2 &\nproduz 2 25 2 &\nproduz 3 25 2 &'
+    $'produz 1 25 2 &\nproduz 2 25 2 &\nproduz 3 25 2 &' || FAILURES=$((FAILURES + 1))
 
-check_sequences "$OUTPUT_DIR/production_stress_same_channel.log" 80
-check_sequences "$OUTPUT_DIR/production_stress_all_channels.log" 75
+check_sequences "$OUTPUT_DIR/production_simple.log" 1 || FAILURES=$((FAILURES + 1))
+check_sequences "$OUTPUT_DIR/production_multiple.log" 9 || FAILURES=$((FAILURES + 1))
+check_sequences "$OUTPUT_DIR/production_distributed.log" 9 || FAILURES=$((FAILURES + 1))
+check_sequences "$OUTPUT_DIR/production_concurrent.log" 30 || FAILURES=$((FAILURES + 1))
+check_sequences "$OUTPUT_DIR/production_stress_same_channel.log" 80 || FAILURES=$((FAILURES + 1))
+check_sequences "$OUTPUT_DIR/production_stress_all_channels.log" 75 || FAILURES=$((FAILURES + 1))
+
+[ "$FAILURES" -eq 0 ]
