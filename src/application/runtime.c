@@ -169,7 +169,9 @@ static int run_command_loop(void *context, WorkerManager *manager,
 
     if (process_command(context, manager, paradigm, cmd) == -1) {
       perror("[MAIN] Erro processando comando");
-      exit_status = EXIT_FAILURE;
+      if (errno != EINVAL) {
+        exit_status = EXIT_FAILURE;
+      }
     }
 
     free_command(cmd);

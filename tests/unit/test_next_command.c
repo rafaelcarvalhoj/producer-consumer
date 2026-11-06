@@ -13,7 +13,15 @@ void test_next_command(void)
     assert(fputs("produz 2 5 2 &\n"
                  "consome 3 4 1 &\n"
                  "shutdown\n"
+                 "produz 0 15 2 &\n"
+                 "produz 1 1 1 &\n"
+                 "consome 1 1024 2 &\n"
                  "produz 2 5 3 &\n"
+                 "produz 1 1025 1 &\n"
+                 "consome 1 0 1 &\n"
+                 "produz -1 5 1 &\n"
+                 "produz 1 5 0 &\n"
+                 "produz 1 5 1 x\n"
                  "desconhecido\n", input) >= 0);
     rewind(input);
 
@@ -43,6 +51,35 @@ void test_next_command(void)
     assert(command->op == SHUTDOWN);
     free_command(command);
 
+    command = next_command();
+    assert(command != NULL);
+    assert(command->op == PRODUCE);
+    assert(command->p == 0);
+    assert(command->n_msgs == 15);
+    assert(command->ack == NO);
+    free_command(command);
+
+    command = next_command();
+    assert(command != NULL);
+    assert(command->op == PRODUCE);
+    assert(command->p == 1);
+    assert(command->n_msgs == 1);
+    assert(command->ack == YES);
+    free_command(command);
+
+    command = next_command();
+    assert(command != NULL);
+    assert(command->op == CONSUME);
+    assert(command->p == 1);
+    assert(command->n_msgs == 1024);
+    assert(command->ack == NO);
+    free_command(command);
+
+    assert(next_command() == NULL);
+    assert(next_command() == NULL);
+    assert(next_command() == NULL);
+    assert(next_command() == NULL);
+    assert(next_command() == NULL);
     assert(next_command() == NULL);
     assert(next_command() == NULL);
 
