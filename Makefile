@@ -11,7 +11,13 @@ APP_SOURCES := $(wildcard src/*.c src/*/*.c src/*/*/*.c)
 APP_HEADERS := $(wildcard src/*.h src/*/*.h src/*/*/*.h)
 LIB_SOURCES := $(filter-out src/main.c,$(APP_SOURCES))
 UNIT_SOURCES := $(wildcard tests/unit/test_*.c)
-
+	
+TEST_WRAP_FLAGS := \
+	-Wl,--wrap=shmget \
+	-Wl,--wrap=shmat \
+	-Wl,--wrap=shmdt \
+	-Wl,--wrap=shmctl
+	
 .PHONY: build run test clean
 
 build: $(APP)
@@ -25,7 +31,7 @@ run: $(APP)
 
 $(TEST_APP): $(UNIT_SOURCES) $(LIB_SOURCES) $(APP_HEADERS)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(UNIT_SOURCES) $(LIB_SOURCES) -o $@ $(LDFLAGS) $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(UNIT_SOURCES) $(LIB_SOURCES) -o $@ $(LDFLAGS) $(TEST_WRAP_FLAGS) $(LDLIBS)
 
 test: $(APP) $(TEST_APP)
 	@mkdir -p $(TEST_LOG_DIR)
@@ -39,7 +45,7 @@ test: $(APP) $(TEST_APP)
 	@for script in tests/integration/test_*.sh; do \
 		[ -f "$$script" ] || continue; \
 		log="$(TEST_LOG_DIR)/$${script##*/}.log"; \
-		if sh "$$script" ./$(APP) > "$$log" 2>&1; then \
+		if bash "$$script" ./$(APP) > "$$log" 2>&1; then \
 			printf '%s passed.\n' "$$script"; \
 		else \
 			printf '%s failed (see %s).\n' "$$script" "$$log" >&2; \
