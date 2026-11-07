@@ -8,14 +8,19 @@ ProgramCommand *next_command(void)
 {
     char operation[9];
     ProgramCommand parsed = {0};
-
-    if (scanf(">>%8s %d %d", operation, &parsed.p, &parsed.n_msgs) != 3)
+    int ack;
+    if (scanf(">>%8s %d %d %d", operation, &parsed.p, &parsed.n_msgs,&ack) != 4)
     {
-
         return NULL;
     }
-    while ((getchar()) != '\n');        ;
-    printf("esse aqui foi o comando %s %d %d\n", operation, parsed.p, parsed.n_msgs);
+    while ((getchar()) != '\n');
+    if(ack==1){
+        parsed.ack = YES;
+    }
+    else{
+        parsed.ack = NO;
+    }
+    printf("esse aqui foi o comando %s %d %d %d\n", operation, parsed.p, parsed.n_msgs, parsed.ack);
     if (strcmp(operation, "shutdown") == 0)
     {
         parsed.op = SHUTDOWN;
@@ -34,13 +39,13 @@ ProgramCommand *next_command(void)
         {
             return NULL;
         }
-        // parsed.ack = (Ack)ack;
     }
 
     ProgramCommand *command = malloc(sizeof(*command));
     command->op = parsed.op;
     command->p = parsed.p;
     command->n_msgs = parsed.n_msgs;
+    command->ack = parsed.ack;
 
     return command;
 }

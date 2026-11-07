@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include "produtor.h"
 
-int fd_pipes[][2];
 
 static void startup_log(const ProgramArguments *args)
 {
@@ -13,16 +13,9 @@ static void startup_log(const ProgramArguments *args)
   printf("Paradigm: %s\n", paradigm_to_str(args->paradigm));
 }
 
-static void alloc_pipes(int n, int fd_pipes[][2])
-{
-  for (int i = 0; i < n; i++)
-  {
-    pipe(fd_pipes[i]);
-  }
-}
-
 int main(int argc, char **argv)
 {
+  int *msgsIds;
   ProgramArguments *args = load_args(argc, argv);
   if (args == NULL)
   {
@@ -31,33 +24,22 @@ int main(int argc, char **argv)
   startup_log(args);
 
   ProgramCommand *cmd;
-  int (*fd_pipes)[2] = malloc(sizeof *fd_pipes * args->producers);
-  alloc_pipes(args->producers, fd_pipes);
-
+  msgsIds = (int *)malloc(sizeof(int) * args->producers);
+  int * begin = &msgsIds[0];
   for (int i = 0; i < args->producers; i++)
   {
-    int pid = fork();
-    // Aqui é se o fork for um filho.
-    if (pid == 0)
-    {
-      int msg;
-      for (;;)
-      {
-        close(fd_pipes[i][1]);
-        int n = read(fd_pipes[i][0], &msg, sizeof(int));
-        printf("eu recebi msg no produtor %d %d\n", i+1, msg);
-      }
-    }
+    *msgsIds = create_message_exchange(i);
+    printf("MsgCriada: %d \n", *msgsIds);
+    msgsIds++;
   }
+  msgsIds = begin;
 
-  int count = 0;
   for (;;)
   {
 
     cmd = next_command();
     if (cmd == NULL)
     {
-      printf("dei problema aqui");
       free(args);
       return EXIT_FAILURE;
     }
@@ -70,22 +52,34 @@ int main(int argc, char **argv)
     }
     if (operation == PRODUCE)
     {
-      int aba = 1;
-      if ((int)cmd->p == 0)
+      pid_t pid = fork();
+      if (pid == 0)
       {
-        for (int i = 0; i < args->producers; i++)
+        if ((cmd->p != 0 && cmd->p <= args->producers))
         {
-          printf("estou indo escrever no %d\n",i+1);
-          write(fd_pipes[i][1], &aba, sizeof(aba));
+          for (int i = 0; i < args->producers; i++)
+          {
+            printf("PID:%d, enviando para a fila %d\n",getpid(),msgsIds[cmd->p -1]);
+            send_message(msgsIds[cmd->p -1], getpid(), cmd->n_msgs, cmd->ack);
+          }
+        }
+        else if ((cmd->p == 0))
+        {
+          for (int i = 0; i < args->producers; i++)
+          {
+            for(int msgIdsIdx=0;msgIdsIdx< args->producers;msgIdsIdx++){
+              printf("processo com PID:%d \n, enviando para a fila %d",getpid(),msgsIds[msgIdsIdx]);
+              send_message(msgsIds[msgIdsIdx], getpid(), cmd->n_msgs, cmd->ack);
+            }
+          }
         }
       }
       else
       {
-        printf("to aqui escrevendo no correto? %d\n", cmd->p);
-        write(fd_pipes[cmd->p-1][1], &aba, sizeof(aba));
+        continue;
       }
     }
   }
-  // free(args);
-  // return EXIT_SUCCESS;
+  free(args);
+  return EXIT_SUCCESS;
 }
