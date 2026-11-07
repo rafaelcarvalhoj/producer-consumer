@@ -40,7 +40,8 @@ void send_message(int msqid, int sender_pid, int number_of_msgs, int ack)
         msg.send_time = send_time;
         msg.sequentional_number = i;
         int wait = ack == 1 ? 0 : IPC_NOWAIT;
-        msgsnd(msqid, &msg, sizeof(msg), wait);
+        int quant_enviada = msgsnd(msqid, &msg, sizeof(msg), wait);
+        printf("quantidade enviada: %d\n",quant_enviada);
     }
 }
 
