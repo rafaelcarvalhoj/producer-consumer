@@ -1,24 +1,44 @@
 CC ?= cc
-CPPFLAGS ?= -Isrc
-CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -g -pthread
+
 LDFLAGS ?=
 LDLIBS ?= -pthread
 
 APP := build/producer-consumer
 TEST_APP := build/unit-tests
 TEST_LOG_DIR := build/test-logs
-APP_SOURCES := $(wildcard src/*.c src/*/*.c src/*/*/*.c)
-APP_HEADERS := $(wildcard src/*.h src/*/*.h src/*/*/*.h)
-LIB_SOURCES := $(filter-out src/main.c,$(APP_SOURCES))
+
+
+CPPFLAGS ?= -Isrc -std=c11 -Wall -Wextra -Wpedantic -g -pthread
+HEADER_DIRS := $(shell find src -type d)
+CPPFLAGS += $(addprefix -I,$(HEADER_DIRS))
+
+
+APP_SOURCES := $(shell find src -name '*.c')
+APP_HEADERS := $(shell find src -name '*.h')
+
+MAIN_SOURCE := src/main.c
+
+OTHER_MAINS := $(shell find src/ipc -name 'main.c' -o -name 'message_queue.c')
+
+LIB_SOURCES := $(filter-out $(MAIN_SOURCE) $(OTHER_MAINS),$(APP_SOURCES))
+
 UNIT_SOURCES := $(wildcard tests/unit/test_*.c)
+
+# Executáveis adicionais
+OTHER_APPS := $(patsubst src/ipc/%.c,build/ipc/%,$(OTHER_MAINS))
 
 .PHONY: build run test clean
 
-build: $(APP)
+build: $(APP) $(OTHER_APPS)
 
-$(APP): $(APP_SOURCES) $(APP_HEADERS)
+$(APP): $(MAIN_SOURCE) $(LIB_SOURCES) $(APP_HEADERS)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(APP_SOURCES) -o $@ $(LDFLAGS) $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(MAIN_SOURCE) $(LIB_SOURCES) -o $@ $(LDFLAGS) $(LDLIBS)
+
+# Compila cada main separadamente
+build/ipc/%: src/ipc/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ $(LDFLAGS) $(LDLIBS)
 
 run: $(APP)
 	./$(APP) $(ARGS)

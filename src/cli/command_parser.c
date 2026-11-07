@@ -6,38 +6,42 @@
 
 ProgramCommand *next_command(void)
 {
-    printf(">> ");
     char operation[9];
-    if (scanf("%8s", operation) != 1) {
+    ProgramCommand parsed = {0};
+
+    if (scanf(">>%8s %d %d", operation, &parsed.p, &parsed.n_msgs) != 3)
+    {
+
         return NULL;
     }
-
-    ProgramCommand parsed = {0};
-    if (strcmp(operation, "shutdown") == 0) {
+    while ((getchar()) != '\n');        ;
+    printf("esse aqui foi o comando %s %d %d\n", operation, parsed.p, parsed.n_msgs);
+    if (strcmp(operation, "shutdown") == 0)
+    {
         parsed.op = SHUTDOWN;
-    } else {
-        if (strcmp(operation, "produz") == 0) {
+    }
+    else
+    {
+        if (strcmp(operation, "produz") == 0)
+        {
             parsed.op = PRODUCE;
-        } else if (strcmp(operation, "consome") == 0) {
+        }
+        else if (strcmp(operation, "consome") == 0)
+        {
             parsed.op = CONSUME;
-        } else {
+        }
+        else
+        {
             return NULL;
         }
-
-        char extra[2];
-        int ack;
-        if (scanf(" %d %d %d %1s", &parsed.p, &parsed.n_msgs, &ack, extra) != 4 ||
-            parsed.p < 0 || parsed.n_msgs <= 0 ||
-            (ack != YES && ack != NO) || strcmp(extra, "&") != 0) {
-            return NULL;
-        }
-        parsed.ack = (Ack)ack;
+        // parsed.ack = (Ack)ack;
     }
 
     ProgramCommand *command = malloc(sizeof(*command));
-    if (command != NULL) {
-        *command = parsed;
-    }
+    command->op = parsed.op;
+    command->p = parsed.p;
+    command->n_msgs = parsed.n_msgs;
+
     return command;
 }
 
@@ -45,4 +49,3 @@ void free_command(ProgramCommand *command)
 {
     free(command);
 }
-
