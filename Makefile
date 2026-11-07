@@ -47,6 +47,13 @@ test: $(APP) $(SHM_INTEGRATION_TEST) $(TEST_APP)
 		cat $(TEST_LOG_DIR)/unit-tests.log >&2; \
 		exit 1; \
 	fi
+	@if ./$(SHM_INTEGRATION_TEST) > $(TEST_LOG_DIR)/shm-ipc-tests.log 2>&1; then \
+		printf 'Shared memory IPC tests passed.\n'; \
+	else \
+		printf 'Shared memory IPC tests failed (see $(TEST_LOG_DIR)/shm-ipc-tests.log).\n' >&2; \
+		cat $(TEST_LOG_DIR)/shm-ipc-tests.log >&2; \
+		exit 1; \
+	fi
 	@for script in tests/integration/test_*.sh; do \
 		[ -f "$$script" ] || continue; \
 		log="$(TEST_LOG_DIR)/$${script##*/}.log"; \

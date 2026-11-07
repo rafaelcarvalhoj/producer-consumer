@@ -13,6 +13,13 @@
  * para estas funções.
  */
 
+extern int __real_shmget(key_t key, size_t size, int shmflg);
+extern void *__real_shmat(int shmid, const void *shmaddr, int shmflg);
+extern int __real_shmdt(const void *shmaddr);
+extern int __real_shmctl(int shmid, int cmd, struct shmid_ds *buf);
+
+static int mocks_active = 0;
+
 static int shmget_calls;
 static key_t shmget_key;
 static size_t shmget_size;
@@ -42,6 +49,7 @@ static int shmctl_error;
 static unsigned char fake_segment[2048];
 
 static void reset_mocks(void) {
+  mocks_active = 1;
   shmget_calls = 0;
   shmget_key = 0;
   shmget_size = 0;
@@ -73,6 +81,10 @@ static void reset_mocks(void) {
 
 /* Substitui shmget(). */
 int __wrap_shmget(key_t key, size_t size, int shmflg) {
+  if (!mocks_active) {
+    return __real_shmget(key, size, shmflg);
+  }
+
   ++shmget_calls;
 
   shmget_key = key;
@@ -88,6 +100,10 @@ int __wrap_shmget(key_t key, size_t size, int shmflg) {
 
 /* Substitui shmat(). */
 void *__wrap_shmat(int shmid, const void *shmaddr, int shmflg) {
+  if (!mocks_active) {
+    return __real_shmat(shmid, shmaddr, shmflg);
+  }
+
   ++shmat_calls;
 
   shmat_shmid = shmid;
@@ -103,6 +119,10 @@ void *__wrap_shmat(int shmid, const void *shmaddr, int shmflg) {
 
 /* Substitui shmdt(). */
 int __wrap_shmdt(const void *shmaddr) {
+  if (!mocks_active) {
+    return __real_shmdt(shmaddr);
+  }
+
   ++shmdt_calls;
   shmdt_address = shmaddr;
 
@@ -115,6 +135,10 @@ int __wrap_shmdt(const void *shmaddr) {
 
 /* Substitui shmctl(). */
 int __wrap_shmctl(int shmid, int cmd, struct shmid_ds *buf) {
+  if (!mocks_active) {
+    return __real_shmctl(shmid, cmd, buf);
+  }
+
   ++shmctl_calls;
 
   shmctl_shmid = shmid;
@@ -300,4 +324,6 @@ void test_shared_memory(void) {
   test_remove_marks_segment_for_removal();
   test_remove_rejects_invalid_id();
   test_remove_propagates_system_error();
+
+  mocks_active = 0;
 }

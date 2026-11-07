@@ -125,7 +125,8 @@ int shm_process(SharedMemoryContext *context, const ProgramCommand *cmd,
   *child_pid = -1;
   *ack_semid_out = -1;
 
-  if (cmd->n_msgs <= 0 || (cmd->ack != 1 && cmd->ack != 2)) {
+  if (cmd->n_msgs <= 0 || cmd->n_msgs > 1024 ||
+      (cmd->ack != 1 && cmd->ack != 2)) {
     errno = EINVAL;
     return -1;
   }
