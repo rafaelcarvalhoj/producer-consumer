@@ -21,7 +21,7 @@ int msgq_send(int msqid, const void *message, size_t payload_size) {
   return result;
 }
 
-ssize_t msgq_receive(int msqid, void *message, size_t payload_size,
+ssize_t msgq_receive(int msqid, void *message, size_t payload_size, long type,
                      int blocking) {
   if (msqid < 0 || message == NULL) {
     errno = EINVAL;
@@ -32,7 +32,7 @@ ssize_t msgq_receive(int msqid, void *message, size_t payload_size,
   ssize_t result;
 
   do {
-    result = msgrcv(msqid, message, payload_size, 0, flags);
+    result = msgrcv(msqid, message, payload_size, type, flags);
   } while (result == -1 && errno == EINTR);
 
   return result;

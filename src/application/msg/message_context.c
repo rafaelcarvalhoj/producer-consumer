@@ -35,7 +35,7 @@ int msg_context_init(MessageContext *context, int producers) {
     return -1;
   }
 
-  *context = (MessageContext){.stats_msqid = -1};
+  *context = (MessageContext){.ack_msqid = -1, .stats_msqid = -1};
 
   context->channels = setup_message_channels(producers);
 
@@ -48,6 +48,11 @@ int msg_context_init(MessageContext *context, int producers) {
       calloc((size_t)producers, sizeof(*context->consumed_counts));
 
   if (context->consumed_counts == NULL)
+    goto failure;
+
+  context->ack_msqid = msgq_create();
+
+  if (context->ack_msqid == -1)
     goto failure;
 
   context->stats_msqid = msgq_create();
@@ -64,6 +69,34 @@ failure:
     errno = saved_errno;
     return -1;
   }
+}
+
+int msg_context_send_ack(MessageContext *context, pid_t producer_pid) {
+  if (context == NULL || producer_pid <= 0) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  AckMessage ack = {.mtype = producer_pid};
+
+  return msgq_send(context->ack_msqid, &ack, 0);
+}
+
+int msg_context_wait_acks(MessageContext *context, pid_t producer_pid,
+                          int amount) {
+  if (context == NULL || producer_pid <= 0 || amount < 0) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  for (int i = 0; i < amount; i++) {
+    AckMessage ack;
+
+    if (msgq_receive(context->ack_msqid, &ack, 0, producer_pid, 1) == -1)
+      return -1;
+  }
+
+  return 0;
 }
 
 int msg_context_report_consumption(int stats_msqid, int channel, int consumed) {
@@ -87,7 +120,7 @@ int msg_context_collect_stats(MessageContext *context) {
     ConsumptionReport report;
 
     ssize_t received = msgq_receive(context->stats_msqid, &report,
-                                    CONSUMPTION_REPORT_PAYLOAD_SIZE, 0);
+                                    CONSUMPTION_REPORT_PAYLOAD_SIZE, 0, 0);
 
     if (received == -1) {
       if (errno == ENOMSG)
@@ -129,6 +162,15 @@ int msg_context_destroy(MessageContext *context) {
       free(context->channels);
       context->channels = NULL;
       context->n_channels = 0;
+    }
+  }
+
+  if (context->ack_msqid >= 0) {
+    if (msgq_remove(context->ack_msqid) == -1) {
+      if (first_errno == 0)
+        first_errno = errno;
+    } else {
+      context->ack_msqid = -1;
     }
   }
 

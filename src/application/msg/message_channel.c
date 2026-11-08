@@ -38,7 +38,7 @@ int msg_channel_receive(MessageChannel *channel, QueuedMessage *message,
   }
 
   ssize_t received = msgq_receive(channel->msqid, message,
-                                  QUEUED_MESSAGE_PAYLOAD_SIZE, blocking);
+                                  QUEUED_MESSAGE_PAYLOAD_SIZE, 0, blocking);
 
   if (received == -1)
     return -1;

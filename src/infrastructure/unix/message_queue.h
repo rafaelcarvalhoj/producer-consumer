@@ -15,11 +15,12 @@ int msgq_create(void);
 int msgq_send(int msqid, const void *message, size_t payload_size);
 
 /*
- * Retira a mensagem mais antiga da fila.
- * Se blocking == 0 e a fila estiver vazia, retorna -1 com errno = ENOMSG.
+ * Retira a mensagem mais antiga da fila com o tipo type
+ * (type == 0: qualquer tipo).
+ * Se blocking == 0 e não houver mensagem, retorna -1 com errno = ENOMSG.
  * Retorna o número de bytes lidos (sem o mtype) ou -1 em erro.
  */
-ssize_t msgq_receive(int msqid, void *message, size_t payload_size,
+ssize_t msgq_receive(int msqid, void *message, size_t payload_size, long type,
                      int blocking);
 
 /* Remove a fila. */
