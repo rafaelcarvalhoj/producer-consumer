@@ -1,38 +1,18 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include "application/runtime.h"
 #include "cli/startup_args.h"
-#include "cli/command_parser.h"
 
-
-static void startup_log(const ProgramArguments *args) {
-    puts("Producer-Consumer");
-    printf("Producers: %d\n", args->producers);
-    printf("Paradigm: %s\n", paradigm_to_str(args->paradigm));
-}
+#include <stdlib.h>
 
 int main(int argc, char **argv) {
-    ProgramArguments *args = load_args(argc, argv);
-    if (args == NULL) {
-        return EXIT_FAILURE;
-    }
+  ProgramArguments *args = load_args(argc, argv);
 
-    startup_log(args);
+  if (args == NULL) {
+    return EXIT_FAILURE;
+  }
 
-    ProgramCommand *cmd;
+  int result = application_run(args);
 
-    for (;;) {
-        cmd = next_command();
-        if (cmd == NULL) {
-            free(args);
-            return EXIT_FAILURE;
-        }
+  free(args);
 
-        CommandOperation operation = cmd->op;
-        free_command(cmd);
-        if (operation == SHUTDOWN) {
-            break;
-        }
-    }
-    free(args);
-    return EXIT_SUCCESS;
+  return result;
 }

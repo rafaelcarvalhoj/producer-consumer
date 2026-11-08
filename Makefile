@@ -11,7 +11,14 @@ APP_SOURCES := $(wildcard src/*.c src/*/*.c src/*/*/*.c)
 APP_HEADERS := $(wildcard src/*.h src/*/*.h src/*/*/*.h)
 LIB_SOURCES := $(filter-out src/main.c,$(APP_SOURCES))
 UNIT_SOURCES := $(wildcard tests/unit/test_*.c)
-
+SHM_INTEGRATION_TEST := build/test-shared-memory-ipc
+	
+TEST_WRAP_FLAGS := \
+	-Wl,--wrap=shmget \
+	-Wl,--wrap=shmat \
+	-Wl,--wrap=shmdt \
+	-Wl,--wrap=shmctl
+	
 .PHONY: build run test clean
 
 build: $(APP)
@@ -23,11 +30,15 @@ $(APP): $(APP_SOURCES) $(APP_HEADERS)
 run: $(APP)
 	./$(APP) $(ARGS)
 
+$(SHM_INTEGRATION_TEST): tests/integration/test_shared_memory_ipc.c $(LIB_SOURCES) $(APP_HEADERS)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIB_SOURCES) -o $@ $(LDFLAGS) $(LDLIBS)
+	
 $(TEST_APP): $(UNIT_SOURCES) $(LIB_SOURCES) $(APP_HEADERS)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(UNIT_SOURCES) $(LIB_SOURCES) -o $@ $(LDFLAGS) $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(UNIT_SOURCES) $(LIB_SOURCES) -o $@ $(LDFLAGS) $(TEST_WRAP_FLAGS) $(LDLIBS)
 
-test: $(APP) $(TEST_APP)
+test: $(APP) $(SHM_INTEGRATION_TEST) $(TEST_APP)
 	@mkdir -p $(TEST_LOG_DIR)
 	@if ./$(TEST_APP) > $(TEST_LOG_DIR)/unit-tests.log 2>&1; then \
 		printf 'Unit tests passed.\n'; \
@@ -36,10 +47,17 @@ test: $(APP) $(TEST_APP)
 		cat $(TEST_LOG_DIR)/unit-tests.log >&2; \
 		exit 1; \
 	fi
+	@if ./$(SHM_INTEGRATION_TEST) > $(TEST_LOG_DIR)/shm-ipc-tests.log 2>&1; then \
+		printf 'Shared memory IPC tests passed.\n'; \
+	else \
+		printf 'Shared memory IPC tests failed (see $(TEST_LOG_DIR)/shm-ipc-tests.log).\n' >&2; \
+		cat $(TEST_LOG_DIR)/shm-ipc-tests.log >&2; \
+		exit 1; \
+	fi
 	@for script in tests/integration/test_*.sh; do \
 		[ -f "$$script" ] || continue; \
 		log="$(TEST_LOG_DIR)/$${script##*/}.log"; \
-		if sh "$$script" ./$(APP) > "$$log" 2>&1; then \
+		if bash "$$script" ./$(APP) > "$$log" 2>&1; then \
 			printf '%s passed.\n' "$$script"; \
 		else \
 			printf '%s failed (see %s).\n' "$$script" "$$log" >&2; \
