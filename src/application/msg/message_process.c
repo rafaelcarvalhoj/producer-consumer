@@ -204,11 +204,23 @@ int msg_process(MessageContext *context, const ProgramCommand *cmd,
 
   if (cmd->op == PRODUCE) {
     if (cmd->p < 0 || cmd->p > context->n_channels) {
+      fprintf(stderr, "[MAIN] Erro: fila %d não existe (existem %d filas)\n",
+              cmd->p, context->n_channels);
       errno = EINVAL;
       return -1;
     }
   } else if (cmd->op == CONSUME) {
-    if (cmd->p < 1 || cmd->p > context->n_channels) {
+    if (cmd->p == 0) {
+      fprintf(stderr, "[MAIN] Erro: consome exige uma fila específica "
+                      "(p entre 1 e %d)\n",
+              context->n_channels);
+      errno = EINVAL;
+      return -1;
+    }
+
+    if (cmd->p < 0 || cmd->p > context->n_channels) {
+      fprintf(stderr, "[MAIN] Erro: fila %d não existe (existem %d filas)\n",
+              cmd->p, context->n_channels);
       errno = EINVAL;
       return -1;
     }
