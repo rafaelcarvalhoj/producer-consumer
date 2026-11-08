@@ -1,12 +1,11 @@
 #include "application/msg/message_channel.h"
 
 #include "infrastructure/unix/message_queue.h"
-#include "infrastructure/unix/semaphore.h"
 
 #include <errno.h>
 
 static int channel_is_valid(const MessageChannel *channel) {
-  return channel != NULL && channel->msqid >= 0 && channel->sem_mutex >= 0;
+  return channel != NULL && channel->msqid >= 0;
 }
 
 int msg_channel_create(MessageChannel *channel) {
@@ -15,26 +14,9 @@ int msg_channel_create(MessageChannel *channel) {
     return -1;
   }
 
-  *channel = (MessageChannel){
-      .msqid = -1, .sem_mutex = -1, .consumed_count = NULL};
-
   channel->msqid = msgq_create();
-  if (channel->msqid == -1)
-    goto failure;
 
-  channel->sem_mutex = semaphore_create(1);
-  if (channel->sem_mutex == -1)
-    goto failure;
-
-  return 0;
-
-failure:
-  {
-    int saved_errno = errno;
-    msg_channel_destroy(channel);
-    errno = saved_errno;
-    return -1;
-  }
+  return channel->msqid == -1 ? -1 : 0;
 }
 
 int msg_channel_send(MessageChannel *channel, QueuedMessage *message) {
@@ -50,8 +32,7 @@ int msg_channel_send(MessageChannel *channel, QueuedMessage *message) {
 
 int msg_channel_receive(MessageChannel *channel, QueuedMessage *message,
                         int blocking) {
-  if (!channel_is_valid(channel) || message == NULL ||
-      channel->consumed_count == NULL) {
+  if (!channel_is_valid(channel) || message == NULL) {
     errno = EINVAL;
     return -1;
   }
@@ -67,12 +48,7 @@ int msg_channel_receive(MessageChannel *channel, QueuedMessage *message,
     return -1;
   }
 
-  if (semaphore_p(channel->sem_mutex) == -1)
-    return -1;
-
-  (*channel->consumed_count)++;
-
-  return semaphore_v(channel->sem_mutex);
+  return 0;
 }
 
 int msg_channel_destroy(MessageChannel *channel) {
@@ -81,29 +57,10 @@ int msg_channel_destroy(MessageChannel *channel) {
     return -1;
   }
 
-  channel->consumed_count = NULL;
-  int first_errno = 0;
-
-  if (channel->msqid >= 0) {
-    if (msgq_remove(channel->msqid) == -1)
-      first_errno = errno;
-    else
-      channel->msqid = -1;
-  }
-
-  if (channel->sem_mutex >= 0) {
-    if (semaphore_destroy(channel->sem_mutex) == -1) {
-      if (first_errno == 0)
-        first_errno = errno;
-    } else {
-      channel->sem_mutex = -1;
-    }
-  }
-
-  if (first_errno != 0) {
-    errno = first_errno;
+  if (msgq_remove(channel->msqid) == -1)
     return -1;
-  }
+
+  channel->msqid = -1;
 
   return 0;
 }

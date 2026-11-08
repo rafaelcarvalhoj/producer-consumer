@@ -1,6 +1,6 @@
 #include "application/msg/message_context.h"
 
-#include "infrastructure/unix/shared_memory.h"
+#include "infrastructure/unix/message_queue.h"
 
 #include <errno.h>
 #include <stdbool.h>
@@ -29,46 +29,13 @@ static MessageChannel *setup_message_channels(int n_channels) {
   return channels;
 }
 
-/*
- * Os contadores de mensagens consumidas ficam em memória compartilhada,
- * igual ao paradigma de memória compartilhada, para que os processos
- * consumidores possam atualizá-los e o mpmc possa lê-los no shutdown.
- */
-static int setup_consumed_counters(MessageContext *context) {
-  size_t count = (size_t)context->n_channels;
-
-  if (count > SIZE_MAX / sizeof(*context->consumed_counts)) {
-    errno = EOVERFLOW;
-    return -1;
-  }
-
-  size_t size = count * sizeof(*context->consumed_counts);
-
-  context->counters_shmid = shm_create(size);
-
-  if (context->counters_shmid == -1)
-    return -1;
-
-  context->consumed_counts = shm_attach(context->counters_shmid);
-
-  if (context->consumed_counts == NULL)
-    return -1;
-
-  for (int i = 0; i < context->n_channels; i++) {
-    context->consumed_counts[i] = 0;
-    context->channels[i].consumed_count = &context->consumed_counts[i];
-  }
-
-  return 0;
-}
-
 int msg_context_init(MessageContext *context, int producers) {
   if (context == NULL || producers <= 0) {
     errno = EINVAL;
     return -1;
   }
 
-  *context = (MessageContext){.counters_shmid = -1};
+  *context = (MessageContext){.stats_msqid = -1};
 
   context->channels = setup_message_channels(producers);
 
@@ -77,14 +44,66 @@ int msg_context_init(MessageContext *context, int producers) {
 
   context->n_channels = producers;
 
-  if (setup_consumed_counters(context) == -1) {
+  context->consumed_counts =
+      calloc((size_t)producers, sizeof(*context->consumed_counts));
+
+  if (context->consumed_counts == NULL)
+    goto failure;
+
+  context->stats_msqid = msgq_create();
+
+  if (context->stats_msqid == -1)
+    goto failure;
+
+  return 0;
+
+failure:
+  {
     int saved_errno = errno;
     msg_context_destroy(context);
     errno = saved_errno;
     return -1;
   }
+}
 
-  return 0;
+int msg_context_report_consumption(int stats_msqid, int channel, int consumed) {
+  if (channel <= 0 || consumed < 0) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  ConsumptionReport report = {.mtype = channel, .consumed = consumed};
+
+  return msgq_send(stats_msqid, &report, CONSUMPTION_REPORT_PAYLOAD_SIZE);
+}
+
+int msg_context_collect_stats(MessageContext *context) {
+  if (context == NULL || context->consumed_counts == NULL) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  for (;;) {
+    ConsumptionReport report;
+
+    ssize_t received = msgq_receive(context->stats_msqid, &report,
+                                    CONSUMPTION_REPORT_PAYLOAD_SIZE, 0);
+
+    if (received == -1) {
+      if (errno == ENOMSG)
+        return 0;
+
+      return -1;
+    }
+
+    if (report.mtype < 1 || report.mtype > context->n_channels ||
+        report.consumed < 0) {
+      errno = EIO;
+      return -1;
+    }
+
+    context->consumed_counts[report.mtype - 1] += (uint64_t)report.consumed;
+  }
 }
 
 int msg_context_destroy(MessageContext *context) {
@@ -113,23 +132,17 @@ int msg_context_destroy(MessageContext *context) {
     }
   }
 
-  if (context->consumed_counts != NULL) {
-    if (shm_detach(context->consumed_counts) == -1) {
+  if (context->stats_msqid >= 0) {
+    if (msgq_remove(context->stats_msqid) == -1) {
       if (first_errno == 0)
         first_errno = errno;
     } else {
-      context->consumed_counts = NULL;
+      context->stats_msqid = -1;
     }
   }
 
-  if (context->counters_shmid >= 0) {
-    if (shm_remove(context->counters_shmid) == -1) {
-      if (first_errno == 0)
-        first_errno = errno;
-    } else {
-      context->counters_shmid = -1;
-    }
-  }
+  free(context->consumed_counts);
+  context->consumed_counts = NULL;
 
   if (first_errno != 0) {
     errno = first_errno;

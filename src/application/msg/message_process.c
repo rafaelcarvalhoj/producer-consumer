@@ -71,14 +71,70 @@ static int msg_produce(MessageContext *context, const ProgramCommand *cmd,
   return 0;
 }
 
+/*
+ * Estado do consumidor usado pelo handler de SIGTERM. Cada processo
+ * consumidor tem a sua cópia (são definidos depois do fork).
+ */
+static volatile sig_atomic_t consumer_consumed = 0;
+static int consumer_channel = 0;
+static int consumer_stats_msqid = -1;
+
+/*
+ * No shutdown o mpmc envia SIGTERM aos filhos. Antes de morrer, o consumidor
+ * informa quantas mensagens já consumiu, para que entrem no relatório final.
+ * Depois volta à ação padrão e se reenvia o sinal, terminando por SIGTERM.
+ */
+static void handle_consumer_sigterm(int signum) {
+  msg_context_report_consumption(consumer_stats_msqid, consumer_channel,
+                                 consumer_consumed);
+
+  signal(signum, SIG_DFL);
+  raise(signum);
+}
+
+static int install_consumer_sigterm_handler(void) {
+  struct sigaction action = {0};
+
+  action.sa_handler = handle_consumer_sigterm;
+  sigemptyset(&action.sa_mask);
+  action.sa_flags = 0;
+
+  return sigaction(SIGTERM, &action, NULL);
+}
+
+/*
+ * Envia o relatório final com SIGTERM bloqueado, para que o handler
+ * não envie um segundo relatório do mesmo consumidor.
+ */
+static int report_final_consumption(void) {
+  sigset_t block;
+
+  sigemptyset(&block);
+  sigaddset(&block, SIGTERM);
+
+  if (sigprocmask(SIG_BLOCK, &block, NULL) == -1)
+    return -1;
+
+  if (consumer_consumed == 0)
+    return 0;
+
+  return msg_context_report_consumption(consumer_stats_msqid, consumer_channel,
+                                        consumer_consumed);
+}
+
 static int msg_consume(MessageContext *context, const ProgramCommand *cmd) {
-  int consumed = 0;
+  consumer_consumed = 0;
+  consumer_channel = cmd->p;
+  consumer_stats_msqid = context->stats_msqid;
+
+  if (install_consumer_sigterm_handler() == -1)
+    return -1;
 
   printf("[CONSUMER %d] Solicitadas %d mensagens (ACK=%d)\n", getpid(),
          cmd->n_msgs, cmd->ack);
   fflush(stdout);
 
-  while (consumed < cmd->n_msgs) {
+  while (consumer_consumed < cmd->n_msgs) {
     QueuedMessage msg;
 
     if (msg_channel_receive(&context->channels[cmd->p - 1], &msg,
@@ -88,18 +144,30 @@ static int msg_consume(MessageContext *context, const ProgramCommand *cmd) {
       if (cmd->ack == 2 && errno == ENOMSG)
         break;
 
+      int saved_errno = errno;
+      report_final_consumption();
+      errno = saved_errno;
       return -1;
     }
 
-    consumed++;
+    consumer_consumed++;
 
-    if (msg.ack_semid >= 0 && ack_semaphore_signal(msg.ack_semid) == -1)
+    if (msg.ack_semid >= 0 && ack_semaphore_signal(msg.ack_semid) == -1) {
+      int saved_errno = errno;
+      report_final_consumption();
+      errno = saved_errno;
       return -1;
+    }
 
     printf("[CONSUMER %d] Mensagem seq=%u, produtor=%d\n", getpid(),
            msg.sequence, msg.pid);
     fflush(stdout);
   }
+
+  int consumed = consumer_consumed;
+
+  if (report_final_consumption() == -1)
+    return -1;
 
   if (consumed < cmd->n_msgs) {
     fprintf(stderr,

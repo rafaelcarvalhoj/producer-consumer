@@ -263,6 +263,12 @@ int application_run(const ProgramArguments *args) {
     }
 
     if (args->paradigm == MESSAGE_EXCHANGE && context_initialized) {
+      // Os consumidores já terminaram: soma os relatórios da fila.
+      if (msg_context_collect_stats(&msg_context) == -1) {
+        perror("[MAIN] Erro coletando estatísticas de consumo");
+        exit_status = EXIT_FAILURE;
+      }
+
       print_consumption_stats(msg_context.consumed_counts,
                               msg_context.n_channels);
 

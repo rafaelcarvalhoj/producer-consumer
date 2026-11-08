@@ -22,8 +22,6 @@ typedef struct {
 
 typedef struct {
   int msqid;
-  int sem_mutex;              // protege consumed_count
-  uint64_t *consumed_count;   // aponta para memória compartilhada
 } MessageChannel;
 
 /*
@@ -39,7 +37,7 @@ int msg_channel_create(MessageChannel *channel);
 int msg_channel_send(MessageChannel *channel, QueuedMessage *message);
 
 /*
- * Recebe a mensagem mais antiga da fila e contabiliza o consumo.
+ * Recebe a mensagem mais antiga da fila.
  * Se blocking == 0 e a fila estiver vazia, retorna -1 com errno = ENOMSG.
  */
 int msg_channel_receive(MessageChannel *channel, QueuedMessage *message,
