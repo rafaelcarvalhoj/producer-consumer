@@ -14,7 +14,7 @@ typedef struct {
   pid_t pid;
   uint32_t sequence;   // sequencial para o processo emissor (1, 2, ...)
   uint64_t timestamp;  // timestamp em nanossegundos
-  int wants_ack;       // 1: o produtor espera confirmação de consumo
+  int ack_semid;       // -1: sem ack; >= 0: id do semáforo de ack
 } QueuedMessage;
 
 #define QUEUED_MESSAGE_TYPE 1L

@@ -2,6 +2,7 @@
 
 #include "application/msg/message_channel.h"
 #include "application/msg/message_context.h"
+#include "infrastructure/unix/semaphore.h"
 #include "structures/program_command.h"
 
 #include <errno.h>
@@ -11,19 +12,19 @@
 #include <time.h>
 #include <unistd.h>
 
-static int msg_produce(MessageContext *context, const ProgramCommand *cmd) {
+static int msg_produce(MessageContext *context, const ProgramCommand *cmd,
+                       int ack_semid) {
   printf("[PRODUCER %d] Iniciando produção de %d mensagens\n", getpid(),
          cmd->n_msgs);
   fflush(stdout);
 
-  int wants_ack = cmd->ack == 1;
   int published = 0;
   int production_error = 0;
 
   for (int i = 0; i < cmd->n_msgs; i++) {
     QueuedMessage msg = {.pid = getpid(),
                          .sequence = (uint32_t)(i + 1),
-                         .wants_ack = wants_ack};
+                         .ack_semid = ack_semid};
 
     struct timespec ts;
 
@@ -50,12 +51,12 @@ static int msg_produce(MessageContext *context, const ProgramCommand *cmd) {
     fflush(stdout);
   }
 
-  if (wants_ack && published > 0) {
+  if (ack_semid >= 0 && published > 0) {
     printf("[PRODUCER %d] Aguardando confirmação de %d mensagens\n", getpid(),
            published);
     fflush(stdout);
 
-    if (msg_context_wait_acks(context, getpid(), published) == -1)
+    if (ack_semaphore_wait_n(ack_semid, published) == -1)
       return -1;
 
     printf("[PRODUCER %d] Todas as mensagens foram consumidas\n", getpid());
@@ -151,7 +152,7 @@ static int msg_consume(MessageContext *context, const ProgramCommand *cmd) {
 
     consumer_consumed++;
 
-    if (msg.wants_ack && msg_context_send_ack(context, msg.pid) == -1) {
+    if (msg.ack_semid >= 0 && ack_semaphore_signal(msg.ack_semid) == -1) {
       int saved_errno = errno;
       report_final_consumption();
       errno = saved_errno;
@@ -216,12 +217,25 @@ int msg_process(MessageContext *context, const ProgramCommand *cmd,
     return -1;
   }
 
+  int ack_semid = -1;
+
+  if (cmd->op == PRODUCE && cmd->ack == 1) {
+    ack_semid = ack_semaphore_create();
+
+    if (ack_semid == -1)
+      return -1;
+  }
+
   fflush(NULL);
 
   pid_t pid = fork();
 
-  if (pid == -1)
+  if (pid == -1) {
+    int saved_errno = errno;
+    ack_semaphore_destroy(ack_semid);
+    errno = saved_errno;
     return -1;
+  }
 
   if (pid == 0) {
     struct sigaction action = {0};
@@ -232,15 +246,14 @@ int msg_process(MessageContext *context, const ProgramCommand *cmd,
     if (sigaction(SIGINT, &action, NULL) == -1)
       _exit(EXIT_FAILURE);
 
-    int result = cmd->op == PRODUCE ? msg_produce(context, cmd)
+    int result = cmd->op == PRODUCE ? msg_produce(context, cmd, ack_semid)
                                     : msg_consume(context, cmd);
 
     _exit(result == 0 ? EXIT_SUCCESS : EXIT_FAILURE);
   }
 
   *child_pid = pid;
-  // O ACK é feito pela fila de confirmações: não há semáforo a registrar.
-  *ack_semid_out = -1;
+  *ack_semid_out = ack_semid;
 
   return 0;
 }
