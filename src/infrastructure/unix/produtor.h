@@ -6,7 +6,7 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <stdlib.h>
-#include"messages_structs.h"
+#include "structures/messages_structs.h"
 #include"unions/paradigm.h"
 
 void exeuta_produz(ProducerConsumerParadigm p);
