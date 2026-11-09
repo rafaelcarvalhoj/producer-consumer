@@ -1,5 +1,7 @@
 #include "application/runtime.h"
 
+#include "application/msg/message_context.h"
+#include "application/msg/message_process.h"
 #include "application/shm/shared_memory_context.h"
 #include "application/shm/shared_memory_process.h"
 #include "application/worker_manager.h"
@@ -42,7 +44,8 @@ static void startup_log(const ProgramArguments *args) {
   printf("Paradigm: %s\n", paradigm_to_str(args->paradigm));
 }
 
-static void print_consumption_stats(const SharedMemoryContext *context) {
+static void print_consumption_stats(const uint64_t *consumed_counts,
+                                    int n_channels) {
 
   puts("\n======================================");
   puts("       MENSAGENS CONSUMIDAS");
@@ -50,8 +53,8 @@ static void print_consumption_stats(const SharedMemoryContext *context) {
 
   uint64_t total = 0;
 
-  for (int i = 0; i < context->n_channels; i++) {
-    uint64_t count = context->channels[i].consumed_count[0];
+  for (int i = 0; i < n_channels; i++) {
+    uint64_t count = consumed_counts[i];
 
     printf("Canal %d: %" PRIu64 " mensagens\n", i + 1, count);
 
@@ -96,14 +99,11 @@ static int process_command(void *context, WorkerManager *manager,
     break;
 
   case MESSAGE_EXCHANGE:
-    /*
-     * if (msg_process((MessageContext *)context, cmd, &child_pid,
-     *                 &ack_semid) == -1) {
-     *   return -1;
-     * }
-     */
-    errno = ENOSYS;
-    return -1;
+    if (msg_process((MessageContext *)context, cmd, &child_pid,
+                    &ack_semid) == -1) {
+      return -1;
+    }
+    break;
 
   default:
     errno = EINVAL;
@@ -201,7 +201,7 @@ int application_run(const ProgramArguments *args) {
   startup_log(args);
 
   SharedMemoryContext shm_context = {0};
-  // MessageContext msg_context = {0};
+  MessageContext msg_context = {0};
 
   void *context = NULL;
   bool context_initialized = false;
@@ -218,17 +218,13 @@ int application_run(const ProgramArguments *args) {
     break;
 
   case MESSAGE_EXCHANGE:
-    /*
-     * if (msg_context_init(&msg_context, args->producers) == -1) {
-     *   perror("[MAIN] Erro inicializando troca de mensagens");
-     *   return EXIT_FAILURE;
-     * }
-     *
-     * context = &msg_context;
-     * context_initialized = true;
-     */
-    context = NULL;
-    context_initialized = false;
+    if (msg_context_init(&msg_context, args->producers) == -1) {
+      perror("[MAIN] Erro inicializando troca de mensagens");
+      return EXIT_FAILURE;
+    }
+
+    context = &msg_context;
+    context_initialized = true;
     break;
 
   default:
@@ -257,9 +253,26 @@ int application_run(const ProgramArguments *args) {
     if (args->paradigm == SHARED_MEMORY && context_initialized) {
 
       // As estatísticas precisam ser impressas antes da destruição.
-      print_consumption_stats(&shm_context);
+      print_consumption_stats(shm_context.consumed_counts,
+                              shm_context.n_channels);
 
       if (shm_context_destroy(&shm_context) == -1) {
+        perror("[MAIN] Erro destruindo contexto");
+        exit_status = EXIT_FAILURE;
+      }
+    }
+
+    if (args->paradigm == MESSAGE_EXCHANGE && context_initialized) {
+      // Os consumidores já terminaram: soma os relatórios da fila.
+      if (msg_context_collect_stats(&msg_context) == -1) {
+        perror("[MAIN] Erro coletando estatísticas de consumo");
+        exit_status = EXIT_FAILURE;
+      }
+
+      print_consumption_stats(msg_context.consumed_counts,
+                              msg_context.n_channels);
+
+      if (msg_context_destroy(&msg_context) == -1) {
         perror("[MAIN] Erro destruindo contexto");
         exit_status = EXIT_FAILURE;
       }
